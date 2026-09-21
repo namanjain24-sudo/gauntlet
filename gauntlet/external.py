@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-from .defender import Defender
 
 URL = ("https://datasets-server.huggingface.co/rows?dataset=deepset%2Fprompt-injections"
        "&config=default&split={split}&offset={off}&length=100")
@@ -50,7 +49,7 @@ def fetch(cache: Path) -> pd.DataFrame | None:
     return pd.DataFrame(rows)
 
 
-def evaluate(defender: Defender, ext: pd.DataFrame) -> dict:
+def evaluate(defender, ext: pd.DataFrame) -> dict:
     scores = defender.score(ext.text)
     y = ext.label.to_numpy()
     return {

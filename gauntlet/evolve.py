@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .canonical import victim_understands
-from .defender import Defender
+from .defender import make_defender
 from .transforms import MUTATORS
 
 MAX_LEN = 1500
@@ -45,7 +45,7 @@ def _mutate(ind: Individual, rng: random.Random) -> Individual | None:
 
 
 def evolve(
-    defender: Defender, seeds: list[Individual], rng: random.Random,
+    defender, seeds: list[Individual], rng: random.Random,
     generations: int = 10, pop_size: int = 300, elite_frac: float = 0.2, parent_frac: float = 0.4,
 ) -> EvolutionResult:
     pop = [rng.choice(seeds) for _ in range(pop_size)]
@@ -105,7 +105,7 @@ def arms_race(df: pd.DataFrame, kind: str, rounds: int = 5, generations: int = 1
     history, gallery, mutator_totals = [], [], Counter()
     initial = None
     for r in range(rounds):
-        defender = Defender(kind, fpr=fpr, seed=seed).fit(texts, labels).calibrate(benign_val)
+        defender = make_defender(kind, fpr=fpr, seed=seed).fit(texts, labels).calibrate(benign_val)
         initial = initial or defender
         res = evolve(defender, _seeds(df, chunks[r]), rng, generations=generations, pop_size=pop_size)
         history.append({
@@ -123,6 +123,6 @@ def arms_race(df: pd.DataFrame, kind: str, rounds: int = 5, generations: int = 1
         texts += [e.text for e in chosen]
         labels += [1] * len(chosen)
 
-    final = Defender(kind, fpr=fpr, seed=seed).fit(texts, labels).calibrate(benign_val)
+    final = make_defender(kind, fpr=fpr, seed=seed).fit(texts, labels).calibrate(benign_val)
     return {"kind": kind, "history": history, "mutators": dict(mutator_totals.most_common()),
             "gallery": gallery, "initial_defender": initial, "final_defender": final}

@@ -13,16 +13,18 @@ from .corpus import build_dataset
 from .evaluate import lofo
 from .evolve import arms_race
 
-KINDS = ("naive", "hardened", "windowed")
+from .defender import LINEAR_KINDS as KINDS, TRANSFORMER_KINDS
+
+ALL_KINDS = KINDS + TRANSFORMER_KINDS
 
 
 def run(seeds: int = 3, rounds: int = 5, generations: int = 12, pop_size: int = 200,
-        cache: Path = Path("data/external/deepset.json"), log=print) -> dict:
+        cache: Path = Path("data/external/deepset.json"), log=print, kinds: tuple[str, ...] = KINDS) -> dict:
     ext = external.fetch(cache)
-    lofo_rows, arms, ext_rows, gallery, mutators = [], [], [], {}, {k: Counter() for k in KINDS}
+    lofo_rows, arms, ext_rows, gallery, mutators = [], [], [], {}, {k: Counter() for k in kinds}
     for seed in range(seeds):
         df = build_dataset(seed)
-        for kind in KINDS:
+        for kind in kinds:
             t0 = time.time()
             r = lofo(df, kind, seed=seed)
             r["seed"] = seed
@@ -39,7 +41,7 @@ def run(seeds: int = 3, rounds: int = 5, generations: int = 12, pop_size: int = 
                                      **external.evaluate(a[f"{stage}_defender"], ext)})
             log(f"seed {seed} | {kind:<8} done in {time.time() - t0:4.0f}s")
     return {
-        "config": {"seeds": seeds, "rounds": rounds, "generations": generations, "pop_size": pop_size,
+        "config": {"kinds": list(kinds), "seeds": seeds, "rounds": rounds, "generations": generations, "pop_size": pop_size,
                    "external_n": None if ext is None else int(len(ext))},
         "lofo": pd.concat(lofo_rows, ignore_index=True).to_dict("records"),
         "arms": arms, "external": ext_rows, "gallery": gallery,
@@ -50,3 +52,16 @@ def run(seeds: int = 3, rounds: int = 5, generations: int = 12, pop_size: int = 
 def save(results: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(results, indent=1, default=float))
+
+
+def merge(old: dict, new: dict) -> dict:
+    """Replace the defenders present in ``new`` inside ``old`` (so one kind can be re-run alone)."""
+    redo = set(new["config"]["kinds"])
+    keep = lambda rows: [r for r in rows if r["defender"] not in redo]
+    kinds = [k for k in ALL_KINDS if k in redo or k in old["config"].get("kinds", KINDS)]
+    return {
+        "config": {**old["config"], "kinds": kinds},
+        "lofo": keep(old["lofo"]) + new["lofo"], "arms": keep(old["arms"]) + new["arms"],
+        "external": keep(old["external"]) + new["external"],
+        "gallery": {**old["gallery"], **new["gallery"]}, "mutators": {**old["mutators"], **new["mutators"]},
+    }

@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .defender import Defender
+from .defender import make_defender
 
 
 def bootstrap_ci(hits: np.ndarray, n_boot: int = 1000, seed: int = 0) -> tuple[float, float]:
@@ -14,11 +14,11 @@ def bootstrap_ci(hits: np.ndarray, n_boot: int = 1000, seed: int = 0) -> tuple[f
     return float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))
 
 
-def _fit(df: pd.DataFrame, kind: str, fpr: float, exclude: str | None = None, seed: int = 0) -> Defender:
+def _fit(df: pd.DataFrame, kind: str, fpr: float, exclude: str | None = None, seed: int = 0):
     tr = df[df.split == "train"]
     if exclude:
         tr = tr[tr.family != exclude]
-    d = Defender(kind, fpr=fpr, seed=seed).fit(tr.text, tr.label)
+    d = make_defender(kind, fpr=fpr, seed=seed).fit(tr.text, tr.label)
     return d.calibrate(df[(df.split == "val") & (df.label == 0)].text)
 
 

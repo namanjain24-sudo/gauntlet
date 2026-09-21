@@ -81,3 +81,18 @@ class Defender:
 
     def detect(self, texts) -> np.ndarray:
         return self.score(texts) > self.threshold
+
+
+LINEAR_KINDS = ("naive", "hardened", "windowed")
+TRANSFORMER_KINDS = ("transformer", "transformer_windowed")
+
+
+def make_defender(kind: str, fpr: float = 0.01, seed: int = 0):
+    """Build any defender by name. Transformer kinds import torch lazily so it stays optional."""
+    if kind in TRANSFORMER_KINDS:
+        try:
+            from .transformer import TransformerDefender
+        except ImportError as exc:
+            raise SystemExit(f"'{kind}' needs torch + transformers: pip install -r requirements-transformer.txt ({exc})")
+        return TransformerDefender(kind, fpr=fpr, seed=seed)
+    return Defender(kind, fpr=fpr, seed=seed)
