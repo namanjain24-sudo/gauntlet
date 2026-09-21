@@ -1,0 +1,18 @@
+[project]
+name = "gauntlet"
+version = "0.1.0"
+description = "Adversarial co-evolution arena that measures how prompt-injection defenses generalise to unseen attacks."
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "scikit-learn", "certifi"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+gauntlet = "gauntlet.cli:main"
+
+[tool.setuptools]
+packages = ["gauntlet"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,10 @@
+seed 0 | naive    done in   22s
+seed 0 | hardened done in   29s
+seed 0 | windowed done in   57s
+seed 1 | naive    done in   22s
+seed 1 | hardened done in   32s
+seed 1 | windowed done in   51s
+seed 2 | naive    done in   21s
+seed 2 | hardened done in   32s
+seed 2 | windowed done in   54s
+SAVED
