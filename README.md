@@ -32,7 +32,7 @@ Caveats that matter: one small transformer with a fixed 160-step CPU budget per 
 ```bash
 git clone <this repo> && cd gauntlet
 make setup                      # python venv + numpy/pandas/scikit-learn (no torch needed)
-make test                       # 53 tests (7 transformer tests skip themselves without torch)
+make test                       # 53 tests (without torch: 46 run, the transformer module skips itself)
 make quick                      # ~1.5 min smoke run -> reports/quick/report.html
 ```
 
