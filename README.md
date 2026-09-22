@@ -32,7 +32,7 @@ Caveats that matter: one small transformer with a fixed 160-step CPU budget per 
 ```bash
 git clone <this repo> && cd gauntlet
 make setup                      # python venv + numpy/pandas/scikit-learn (no torch needed)
-make test                       # 53 tests (without torch: 46 run, the transformer module skips itself)
+make test                       # 62 tests (without torch: 50 run, transformer/judge/scale modules skip)
 make quick                      # ~1.5 min smoke run -> reports/quick/report.html
 ```
 
@@ -82,7 +82,7 @@ python -m gauntlet bench --url http://localhost:9000/score           # POST {"te
 
 Your detector is calibrated to 1% false positives on benign validation prompts, then measured on recall per attack family, an evolutionary attacker, and AUC on real human-written injections. `--baselines` adds the built-in defenders as reference rows; `--json out.json` saves everything. The included example (a keyword list) gets 8% mean recall and is evaded 93 to 100% of the time.
 
-Note for reading results: the built-in baselines are trained on these attack families, so their recall column is in-distribution; a detector you bring was not trained on them.
+Note for reading results: the built-in baselines are trained on these attack families, so their recall column is in-distribution; a detector you bring was not trained on them. `examples/pretrained_classifier.py` benches a real independently-trained model this way — see [Follow-up experiments](#follow-up-experiments) for what it found.
 
 ## The three experiments
 
@@ -129,6 +129,8 @@ Every experiment talks to defenders through one small interface, which is why th
 | `python -m gauntlet attack GOAL [--defender K]` | evolve attacks for your goal |
 | `python -m gauntlet bench --defender M:F \| --url U` | benchmark your own detector |
 | `python -m gauntlet serve [--port P]` | local web playground |
+| `python -m gauntlet judge-compare [--defender K]` | compare the keyword oracle against a small NLI model oracle |
+| `python -m gauntlet multilingual-check [--defender K] [--frac F]` | does non-English training data narrow the real-data AUC gap? |
 
 Defenders: `naive`, `hardened`, `windowed`, and (with `make setup-transformer`) `transformer`, `transformer_windowed`.
 
@@ -149,13 +151,16 @@ gauntlet/
   external.py     real-data check (downloads and caches deepset/prompt-injections)
   experiment.py   multi-seed runner + merge          report.py   self-contained HTML (inline SVG, dark mode)
   scan.py attack.py bench.py serve.py cli.py          the user-facing commands
-examples/         keyword_detector.py, http_detector.py (starting points for `bench`)
-tests/            53 tests, incl. HTTP servers spun up in-process for serve/bench
+  scale.py        does a bigger/longer-trained transformer close the 'indirect' gap?
+  judge.py        a second (NLI-model) victim oracle, and comparison to the keyword one
+  multilingual.py does non-English training data narrow the real-data AUC gap?
+examples/         keyword_detector.py, http_detector.py, pretrained_classifier.py (starting points for `bench`)
+tests/            62 tests, incl. HTTP servers spun up in-process for serve/bench
 ```
 
 ## Testing
 
-`make test` runs 53 tests: transform and canonicaliser round-trips, dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), and the `scan`/`attack`/`serve`/`bench` commands including bad input, malformed JSON and misbehaving HTTP detectors. CI runs on Python 3.11 and 3.13. The transformer tests skip themselves when torch is not installed.
+`make test` runs 62 tests: transform and canonicaliser round-trips, dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, and the NLI judge comparison. CI runs on Python 3.11 and 3.13. The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
 
 ## Limitations
 
@@ -167,9 +172,56 @@ tests/            53 tests, incl. HTTP servers spun up in-process for serve/benc
 - 3 seeds. Ranges across seeds are in the report's hover tooltips and data tables; differences of a point or two between defenders are within noise.
 - `serve` and `bench` are research instruments on a toy corpus, not a production filter or a certification.
 
-## Ideas for next steps
+## Follow-up experiments
 
-- Bench a pretrained injection classifier from the Hugging Face hub with `bench` and compare it against the trained-in-arena defenders.
-- A larger backbone and longer schedule for the transformer rows.
-- Replace the keyword victim oracle with a real LLM judge for a subset of evasions.
-- Multilingual training data to separate the language gap from the attack-style gap.
+The four "next steps" from the first version of this project turned out to have real, sometimes surprising, answers. Each is a small standalone module so the result is reproducible with one command; none of them change the headline numbers above (they run separate defenders/datasets, not the main experiment).
+
+### A real, independently-trained classifier does the best and the worst
+
+```bash
+python -m gauntlet bench --defender examples/pretrained_classifier.py:score --baselines
+```
+
+[`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) (184M params, trained by a third party, never saw Gauntlet's data) gets the **best real-data AUC of anything tested, 0.88** — clearly ahead of the in-house windowed defender's 0.81. It is also the **worst on `indirect` (hidden-in-a-document) injections, 5% recall**, and mean recall across all eight families is only 43%, both well below the in-house baselines. Two things are going on, and they are different findings: architecture (it has no canonicalisation or windowing, so it inherits the same `indirect` blind spot as the raw-text defenders) and calibration (at the threshold Gauntlet's own benign validation data implies, it fires on only 4.5% of real attacks despite ranking them well — a real illustration of the "calibration does not transfer" limitation, now shown on a production-grade model instead of a toy one).
+
+### A longer schedule mostly closes the transformer's blind spot; a bigger encoder barely helps
+
+```bash
+make scale     # or: python -c "from gauntlet import scale; print(scale.render(scale.run()))"
+```
+
+Isolates the one open question from the headline result: is the fine-tuned MiniLM's low recall on unseen `indirect` injections a capacity problem or a training-budget problem? Four configs, holding `indirect` out of training each time, single seed (the headline table's 13% is a 3-seed mean; this run's matching config lands at 3% on its own seed -- same story, seed variance on a family this hard):
+
+| config | recall on unseen indirect | recall when trained on it | fit time |
+|---|---|---|---|
+| MiniLM-L6 (22M), 160 steps — the headline config | 3% | 99% | 107s |
+| MiniLM-L6 (22M), 640 steps (4x longer) | 50% | 100% | 531s |
+| MiniLM-L12 (33M), 160 steps (deeper) | 51% | 100% | 217s |
+| MiniLM-L12 (33M), 640 steps (deeper + longer) | 58% | 100% | 785s |
+
+Both knobs help, by about the same amount, independently: going deeper alone (MiniLM-L12, still 160 steps) recovers almost exactly as much recall as training 4x longer alone (MiniLM-L6, 640 steps) -- 51% vs 50%. Combining both only pushes it a little further, to 58%, which is still short of the non-transformer windowed defender's 89% on this family (and of hardened's 74%) at a fraction of the training cost. So the original 13%-recall number really was a fixable training-budget problem, not a hard capacity ceiling -- but fixing it with more compute costs more than fixing it with canonicalisation and windowing did, and does not fully close the gap either.
+
+### The choice of victim oracle is itself a real methodological decision
+
+```bash
+python -m gauntlet judge-compare --defender hardened
+```
+
+Gauntlet's victim oracle (`canonical.victim_understands`) accepts a mutant if most of the intent's content words survive canonicalisation — cheap enough to run millions of times inside the evolutionary attacker. `judge.py` adds a second, independent oracle: a small (66M) pretrained NLI model, testing whether the canonicalised text *entails* "this message asks the reader to {intent}". On 200 plain, unmutated attacks, the two oracles **agree only 58% of the time** (the keyword oracle always accepts a plain attack, since the words are all there verbatim; the NLI model does not). The disagreement is concentrated: on intents with a specific number in them ("transfer $53758 to account 56149390"), the NLI model accepts only 33%, against 75% on intents without one — an off-the-shelf entailment model is much stricter about exact figures than about paraphrasable instructions. On evolved evasions against `hardened`, agreement drops further to 52%. This does not mean one oracle is "right"; it means the arena's numbers are conditional on a specific, documented judge, and swapping it for a stricter one would move every attacker-success number in this README. That conditionality was previously undocumented; now there is a command that quantifies it.
+
+### Multilingual training data changes AUC, but not by closing the language gap
+
+```bash
+python -m gauntlet multilingual-check --defender hardened   # or windowed
+```
+
+Mixes German/French/Spanish benign text into training (`corpus.build_dataset(multilingual_frac=...)`) and re-measures real-data AUC on the whole set and on a German-looking subset of it (a diacritics/stopword heuristic, not ground truth — the dataset carries no language column; about 35% of it looks German). Two seeds each:
+
+| defender | training data | overall AUC | German-subset AUC | English-subset AUC |
+|---|---|---|---|---|
+| hardened | English only | 0.66 | 0.62 | 0.67 |
+| hardened | +30% German/French/Spanish | 0.67 | 0.62 | **0.72** |
+| windowed | English only | 0.80 | 0.80 | 0.80 |
+| windowed | +30% German/French/Spanish | 0.80 | **0.82** | 0.81 |
+
+Adding non-English training data did **not** close the German-subset gap for the linear `hardened` defender (0.62 → 0.62, flat) — it improved the *English*-subset AUC instead (0.67 → 0.72), more consistent with an added-diversity regularisation effect than a language-coverage effect. For `windowed` it went the other way: a small, seed-consistent gain specifically on the German subset (0.80 → 0.82). Neither defender's German-subset AUC comes close to the linear windowed defender's English-only AUC (0.80), so most of the real-data gap for `hardened` looks like it is about attack style, not language — but the effect of adding multilingual data is architecture-dependent, not a free win.

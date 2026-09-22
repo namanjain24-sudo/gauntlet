@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import attack, bench, experiment, report, scan
+from . import attack, bench, experiment, multilingual, report, scan
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -45,6 +45,14 @@ def main(argv: list[str] | None = None) -> None:
     bn.add_argument("--pop", type=int, default=150)
     bn.add_argument("--seed", type=int, default=0)
     bn.add_argument("--json", type=Path, help="write full results to this file")
+    jc = sub.add_parser("judge-compare", help="compare the keyword victim oracle against a small NLI model oracle")
+    jc.add_argument("--defender", default="hardened", help="defender to evolve evasions against")
+    jc.add_argument("--n", type=int, default=120, help="plain attacks to sample (evasions sampled separately)")
+    jc.add_argument("--seed", type=int, default=0)
+    ml = sub.add_parser("multilingual-check", help="does non-English training data narrow the real-data AUC gap?")
+    ml.add_argument("--defender", default="hardened")
+    ml.add_argument("--frac", type=float, default=0.25, help="fraction of training benign text in German/French/Spanish")
+    ml.add_argument("--seed", type=int, default=0)
     sv = sub.add_parser("serve", help="local web playground (scan prompts, run the attacker) at http://127.0.0.1:8000")
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--kinds", default=",".join(experiment.KINDS), help="defenders to load")
@@ -66,6 +74,26 @@ def main(argv: list[str] | None = None) -> None:
             ap.error(f"unknown defender(s): {', '.join(bad)}")
         rows = scan.scan(texts, scan.train_defenders(kinds))
         print(json.dumps(rows, indent=1) if args.json else scan.render(rows))
+        return
+    if args.cmd == "multilingual-check":
+        try:
+            r = multilingual.run(args.defender, args.seed, args.frac)
+        except RuntimeError as exc:
+            ap.error(str(exc))
+        print(multilingual.render(r))
+        return
+    if args.cmd == "judge-compare":
+        try:
+            from . import judge
+        except ImportError as exc:
+            ap.error(f"needs torch + transformers: pip install -r requirements-transformer.txt ({exc})")
+        from .corpus import build_dataset
+        df = build_dataset(args.seed)
+        d = scan.train_defenders((args.defender,), seed=args.seed, df=df)[args.defender]
+        j = judge.ModelJudge()
+        plain = judge.compare(*judge.sample_attacks(df, args.n, args.seed), j)
+        evasions = judge.compare(*judge.sample_evasions(df, d, seed=args.seed), j)
+        print(judge.render(plain, evasions))
         return
     if args.cmd == "bench":
         try:
