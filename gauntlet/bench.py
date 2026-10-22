@@ -56,7 +56,7 @@ class CallableDefender:
             raise ValueError(f"defender '{self.kind}' returned NaN/inf scores")
         return out
 
-    def calibrate(self, benign_val) -> "CallableDefender":
+    def calibrate(self, benign_val) -> CallableDefender:
         self.threshold = float(np.quantile(self.score(benign_val), 1.0 - self.fpr))
         return self
 

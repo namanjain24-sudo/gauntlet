@@ -12,18 +12,21 @@ Five defenders, 3 seeds each, full data in [`reports/report.html`](reports/repor
 
 | defender | unseen-family recall | weakest unseen family | arms race, attacker success (round 1 → 5) | real human-written injections, AUC (before → after adversarial training) |
 |---|---|---|---|---|
-| naive (TF-IDF + logistic regression) | 86.6% | indirect 30% | 75% → 1% | 0.57 → 0.60 |
-| hardened (canonicalise first) | 96.7% | indirect 74% | 91% → 0% | 0.67 → 0.71 |
-| windowed (hardened + max over sentence windows) | 96.5% | indirect 89% | 46% → 27% | **0.81 → 0.81** |
+| naive (TF-IDF + logistic regression) | 84.5% | indirect 32% | 68% → 0% | 0.56 → 0.57 |
+| hardened (canonicalise first) | 96.2% | indirect 71% | 92% → 3% | 0.67 → 0.70 |
+| windowed (hardened + max over sentence windows) | **98.5%** | authority 97% | 16% → 14% | **0.81 → 0.81** |
 | transformer (fine-tuned MiniLM-L6, raw text) | 87.6% | **indirect 13%** | 75% → 0% | 0.57 → 0.64 |
 | transformer windowed (MiniLM + canonicalise + windows) | 96.9% | indirect 82% | 55% → 0% | 0.72 → 0.76 |
+
+(linear rows use the current 21-operator attacker, described below; the two transformer rows were measured with the original 19-operator attacker and have not been re-run, since this environment has no `torch` — see [Follow-up experiments](#follow-up-experiments) for how to refresh them)
 
 What this says:
 
 1. **In-distribution numbers are useless.** Every defender scores ~100% on attack families it trained on. The spread only appears on families held out of training.
-2. **A stronger model did not fix it. Architecture did.** The fine-tuned transformer on raw text (87.6%) is no better than TF-IDF on raw text (86.6%), and it is the worst of all five on hidden-instruction documents (13%). This is not an input-truncation artifact: those texts are about 60 tokens, well under the 256-token limit. Once canonicalisation and windowing are added, the transformer (96.9%) and the linear model (96.5%) land in the same place.
-3. **"The attacker can't beat it anymore" is not a quality signal.** Four of five defenders are patched to about 0% attacker success by adversarial training. The one defender the attacker keeps breaking (linear windowed, 27%) has the best real-world ranking (AUC 0.81). Adversarial training moved real-data AUC by only 0 to +0.07.
-4. **What tracked real-world AUC here was canonicalisation plus windowing, not the backbone and not arena success rate.** Both windowed variants rank above their non-windowed counterparts on human-written injections, and the linear one still beats the transformer one (0.81 vs 0.76).
+2. **A stronger model did not fix it. Architecture did.** The fine-tuned transformer on raw text (87.6%) is no better than TF-IDF on raw text (84.5%), and it is the worst of all five on hidden-instruction documents (13%). This is not an input-truncation artifact: those texts are about 60 tokens, well under the 256-token limit. Once canonicalisation and windowing are added, the picture flips: the linear windowed defender (98.5%) now clearly beats the transformer windowed one (96.9%).
+3. **Explicit obfuscation features are worth more than a bigger search space.** Two new attacker tricks (Unicode tag-character smuggling and bidi-override — see below) were added to the evolutionary attacker's toolbox, which should only make attacks harder to catch. Instead `windowed`'s weakest family moved from indirect (89%) to authority (97%) and its arms-race success collapsed from 46%→27% to 16%→14%, because the two new tricks are near-perfect *tells* once canonicalisation exposes them as explicit flag features — a defender that reads flags wins even against a strictly larger attack surface.
+4. **"The attacker can't beat it anymore" is not a quality signal on its own.** `hardened` is patched to 3% attacker success by adversarial training, yet still trails `windowed` badly on real-world ranking (AUC 0.70 vs 0.81). Adversarial training moved real-data AUC by only 0 to +0.03 this run.
+5. **What tracked real-world AUC here was canonicalisation plus windowing, not the backbone and not arena success rate.** Both windowed variants rank above their non-windowed counterparts on human-written injections, and the linear one now beats the transformer one outright (0.81 vs 0.76).
 
 Caveats that matter: one small transformer with a fixed 160-step CPU budget per fit; 3 seeds; the real-data set (662 prompts) is English + German while training data is English only. A bigger model or longer schedule may behave differently. See [Limitations](#limitations).
 
@@ -32,7 +35,7 @@ Caveats that matter: one small transformer with a fixed 160-step CPU budget per 
 ```bash
 git clone <this repo> && cd gauntlet
 make setup                      # python venv + numpy/pandas/scikit-learn (no torch needed)
-make test                       # 62 tests (without torch: 50 run, transformer/judge/scale modules skip)
+make test                       # 64 tests (without torch: 54 run, transformer/judge/scale modules skip)
 make quick                      # ~1.5 min smoke run -> reports/quick/report.html
 ```
 
@@ -104,7 +107,7 @@ An evolved attack only counts if a **victim oracle** can still recover the malic
   payload split, multilingual, indirect,         defenders (all: fit / score / calibrate / detect)
   obfuscation)                                   naive | hardened | windowed | transformer | transformer_windowed
         |                                                    ^
- 19 mutation operators --> evolve.py -----------------------+   attacker vs. retraining defender
+ 21 mutation operators --> evolve.py -----------------------+   attacker vs. retraining defender
         |                                                    |
  victim oracle (canonical.py): could a canonicalising        +--> evaluate.py (LOFO)  external.py (real data)
  model still read the goal? if not, the mutant is rejected        report.py -> one self-contained HTML file
@@ -140,7 +143,8 @@ Reproducing the full results: `make full` (linear defenders, 3 seeds, ~5 min), t
 
 ```
 gauntlet/
-  transforms.py   19 text mutation operators (leetspeak, homoglyphs, base64, padding, interleaving, ...)
+  transforms.py   21 text mutation operators (leetspeak, homoglyphs, base64, padding, interleaving,
+                  Unicode tag-character smuggling, bidi-override, ...)
   families.py     8 attack families
   corpus.py       synthetic goals, benign prompts, hard negatives, dataset splits
   canonical.py    canonicalisation + the victim oracle
@@ -155,12 +159,12 @@ gauntlet/
   judge.py        a second (NLI-model) victim oracle, and comparison to the keyword one
   multilingual.py does non-English training data narrow the real-data AUC gap?
 examples/         keyword_detector.py, http_detector.py, pretrained_classifier.py (starting points for `bench`)
-tests/            62 tests, incl. HTTP servers spun up in-process for serve/bench
+tests/            64 tests, incl. HTTP servers spun up in-process for serve/bench
 ```
 
 ## Testing
 
-`make test` runs 62 tests: transform and canonicaliser round-trips, dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, and the NLI judge comparison. CI runs on Python 3.11 and 3.13. The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
+`make test` runs 64 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, and the NLI judge comparison. CI runs on Python 3.11 and 3.13. The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
 
 ## Limitations
 
@@ -174,7 +178,7 @@ tests/            62 tests, incl. HTTP servers spun up in-process for serve/benc
 
 ## Follow-up experiments
 
-The four "next steps" from the first version of this project turned out to have real, sometimes surprising, answers. Each is a small standalone module so the result is reproducible with one command; none of them change the headline numbers above (they run separate defenders/datasets, not the main experiment).
+The four "next steps" from the first version of this project turned out to have real, sometimes surprising, answers. Each is a small standalone module so the result is reproducible with one command; none of them change the headline numbers above (they run separate defenders/datasets, not the main experiment). A fifth addition, below, *does* touch the main experiment — it adds two new attacker tricks, so the headline table was re-measured for the three linear defenders to stay honest.
 
 ### A real, independently-trained classifier does the best and the worst
 

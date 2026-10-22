@@ -69,7 +69,7 @@ class TransformerDefender:
     def _encode(self, texts: list[str]):
         return self.tok(texts, padding=True, truncation=True, max_length=self.max_len, return_tensors="pt")
 
-    def fit(self, texts, labels) -> "TransformerDefender":
+    def fit(self, texts, labels) -> TransformerDefender:
         torch.manual_seed(self.seed)
         rng = np.random.default_rng(self.seed)
         self.tok, encoder = _backbone(self.model_name)
@@ -125,7 +125,7 @@ class TransformerDefender:
         np.maximum.at(out, np.asarray(owner, dtype=int), self._proba(chunks))
         return out
 
-    def calibrate(self, benign_val) -> "TransformerDefender":
+    def calibrate(self, benign_val) -> TransformerDefender:
         scores = self.score(benign_val)
         self.threshold = float(np.quantile(scores, 1.0 - self.fpr))
         return self

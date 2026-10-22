@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from .canonical import visible
+
 ORDER = ("naive", "hardened", "windowed", "transformer", "transformer_windowed")   # fixed colour slot per defender
 BLURB = {
     "naive": "raw text → TF-IDF → logistic regression",
@@ -119,9 +121,7 @@ def _table(df: pd.DataFrame) -> str:
 
 
 def _show(text: str) -> str:
-    for ch, name in (("​", "⟨zw⟩"), ("­", "⟨shy⟩")):
-        text = text.replace(ch, name)
-    return html.escape(text)
+    return html.escape(visible(text))
 
 
 def aggregate(res: dict):
@@ -147,18 +147,21 @@ def findings(g, a, e, kinds) -> list[str]:
     for kind in kinds:
         d = g[g.defender == kind]
         worst = d.sort_values("ood_recall").iloc[0]
-        out.append(f"<b>{kind.replace("_", " ")}</b>: mean recall on a never-seen attack family is {pct(d.ood_recall.mean(), 1)} "
+        name = kind.replace("_", " ")
+        out.append(f"<b>{name}</b>: mean recall on a never-seen attack family is {pct(d.ood_recall.mean(), 1)} "
                    f"(in-distribution {pct(d.id_recall.mean(), 1)}); weakest family is "
                    f"<i>{worst.family.replace('_', ' ')}</i> at {pct(worst.ood_recall)}.")
     for kind in kinds:
         d = a[a.defender == kind].sort_values("round")
-        out.append(f"<b>{kind.replace("_", " ")}</b> under attack: evolved attackers evade it {pct(d.asr_mean.iloc[0])} of the time in round 1 "
+        name = kind.replace("_", " ")
+        out.append(f"<b>{name}</b> under attack: evolved attackers evade it {pct(d.asr_mean.iloc[0])} of the time in round 1 "
                    f"and {pct(d.asr_mean.iloc[-1])} in round {len(d)} (peak later round: {pct(d.asr_mean.iloc[1:].max())}).")
     if e is not None:
         for kind in kinds:
             r0 = e[(e.defender == kind) & (e.stage == "initial")].iloc[0]
             r1 = e[(e.defender == kind) & (e.stage == "final")].iloc[0]
-            out.append(f"<b>{kind.replace("_", " ")}</b> on real human-written injections: AUC {r0.auc_mean:.2f} before adversarial training, "
+            name = kind.replace("_", " ")
+            out.append(f"<b>{name}</b> on real human-written injections: AUC {r0.auc_mean:.2f} before adversarial training, "
                        f"{r1.auc_mean:.2f} after.")
     return out
 

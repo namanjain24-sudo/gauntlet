@@ -32,10 +32,12 @@ def lofo(df: pd.DataFrame, kind: str, fpr: float = 0.01, seed: int = 0) -> pd.Da
         attacks = test[test.family == fam].text
         held_out = _fit(df, kind, fpr, exclude=fam, seed=seed)
         id_hits, ood_hits = full.detect(attacks), held_out.detect(attacks)
+        id_lo, id_hi = bootstrap_ci(id_hits)
+        ood_lo, ood_hi = bootstrap_ci(ood_hits)
         rows.append({
             "defender": kind, "family": fam,
-            "id_recall": id_hits.mean(), "id_lo": bootstrap_ci(id_hits)[0], "id_hi": bootstrap_ci(id_hits)[1],
-            "ood_recall": ood_hits.mean(), "ood_lo": bootstrap_ci(ood_hits)[0], "ood_hi": bootstrap_ci(ood_hits)[1],
+            "id_recall": id_hits.mean(), "id_lo": id_lo, "id_hi": id_hi,
+            "ood_recall": ood_hits.mean(), "ood_lo": ood_lo, "ood_hi": ood_hi,
             "fpr_test": float(full.detect(benign_test).mean()),
         })
     out = pd.DataFrame(rows)

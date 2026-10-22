@@ -55,7 +55,7 @@ class Defender:
             return list(texts)
         return [self._harden(t) for t in texts]
 
-    def fit(self, texts, labels) -> "Defender":
+    def fit(self, texts, labels) -> Defender:
         self.model.fit(self._prep(texts), np.asarray(labels))
         return self
 
@@ -74,7 +74,7 @@ class Defender:
         np.maximum.at(out, np.asarray(owner), probs)
         return out
 
-    def calibrate(self, benign_val) -> "Defender":
+    def calibrate(self, benign_val) -> Defender:
         scores = self.score(benign_val)
         self.threshold = float(np.quantile(scores, 1.0 - self.fpr))
         return self
@@ -93,6 +93,6 @@ def make_defender(kind: str, fpr: float = 0.01, seed: int = 0):
         try:
             from .transformer import TransformerDefender
         except ImportError as exc:
-            raise SystemExit(f"'{kind}' needs torch + transformers: pip install -r requirements-transformer.txt ({exc})")
+            raise SystemExit(f"'{kind}' needs torch + transformers: pip install -r requirements-transformer.txt ({exc})") from exc
         return TransformerDefender(kind, fpr=fpr, seed=seed)
     return Defender(kind, fpr=fpr, seed=seed)

@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> None:
                 mine = bench.CallableDefender(fn, args.name or Path(target).stem or func, per_text=args.per_text)
             results = []
             if args.baselines:
-                for kind, d in scan.train_defenders(seed=args.seed).items():
+                for d in scan.train_defenders(seed=args.seed).values():
                     results.append(bench.run_bench(d, seed=args.seed, generations=args.generations, pop_size=args.pop))
             results.append(bench.run_bench(mine, seed=args.seed, generations=args.generations, pop_size=args.pop))
         except (ValueError, OSError) as exc:

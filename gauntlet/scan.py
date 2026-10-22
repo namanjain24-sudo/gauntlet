@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .canonical import canonicalize, transform_flags
+from .canonical import canonicalize, transform_flags, visible
 from .corpus import build_dataset
 from .defender import LINEAR_KINDS, make_defender
 
@@ -44,7 +44,7 @@ def _clip(s: str, n: int = 110) -> str:
 def render(rows: list[dict]) -> str:
     out = []
     for r in rows:
-        out.append(f"\n> {_clip(r['text'])}")
+        out.append(f"\n> {_clip(visible(r['text']))}")
         if r["canonical"]:
             out.append(f"  canonical view : {_clip(r['canonical'])}")
         if r["flags"]:

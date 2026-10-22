@@ -5,10 +5,8 @@ family withheld and measures how many of its attacks are still caught.
 """
 from __future__ import annotations
 
-import base64
-import codecs
 import random
-from typing import Callable
+from collections.abc import Callable
 
 from . import transforms as T
 
@@ -81,7 +79,11 @@ def indirect(i: str, rng: random.Random) -> str:
 
 def obfuscation(i: str, rng: random.Random) -> str:
     text = direct_override(i, rng)
-    tricks = rng.sample([T.leet, T.homoglyph, T.zero_width, T.spaced_letters, T.fullwidth, T.alt_case], rng.choice([1, 2]))
+    tricks = rng.sample(
+        [T.leet, T.homoglyph, T.zero_width, T.spaced_letters, T.fullwidth, T.alt_case,
+         T.tag_smuggle, T.bidi_override],
+        rng.choice([1, 2]),
+    )
     for fn in tricks:
         text = fn(text, rng)
     return text

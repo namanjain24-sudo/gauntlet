@@ -17,7 +17,7 @@ import codecs
 import re
 import unicodedata
 
-from .transforms import HOMOGLYPHS, LEET
+from .transforms import BIDI_PDF, BIDI_RLO, HOMOGLYPHS, TAG_OFFSET, ZERO_WIDTH
 
 _ZW_RE = re.compile("[​-‏⁠﻿­]")
 _HOMOGLYPH_BACK = {v: k for k, v in HOMOGLYPHS.items()}
@@ -27,6 +27,29 @@ _B64_RE = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
 _HEX_RE = re.compile(r"\b(?:[0-9a-fA-F]{2}){8,}\b")
 _ROT_HINT = re.compile(r"rot-?13|caesar", re.I)
 _WORD_RE = re.compile(r"[a-z]{4,}")
+_TAG_RE = re.compile("[\U000e0020-\U000e007e]+")
+_BIDI_RE = re.compile(f"{BIDI_RLO}(.*?){BIDI_PDF}", re.S)
+
+
+def _detag(text: str) -> str:
+    """Undo ASCII-smuggling: decode Unicode 'tag' characters back to the ASCII they hide."""
+    return _TAG_RE.sub(lambda m: "".join(chr(ord(c) - TAG_OFFSET) for c in m.group(0)), text)
+
+
+def _unbidi(text: str) -> str:
+    """Undo the bidi-override trick: reverse text back out of RLO...PDF spans."""
+    return _BIDI_RE.sub(lambda m: m.group(1)[::-1], text)
+
+
+_MARKERS = ((ZERO_WIDTH, "⟨zw⟩"), ("\u00ad", "⟨shy⟩"), (BIDI_RLO, "⟨rlo⟩"), (BIDI_PDF, "⟨pdf⟩"))
+
+
+def visible(text: str) -> str:
+    """Show invisible / display-altering characters as markers, so a terminal or report shows what was sent."""
+    text = _TAG_RE.sub(lambda m: "⟨tag:" + _detag(m.group(0)) + "⟩", text)
+    for ch, name in _MARKERS:
+        text = text.replace(ch, name)
+    return text
 
 STOPWORDS = frozenset(
     "your that with this from into them then also have will what when where which "
@@ -79,6 +102,10 @@ def decoded_payloads(text: str) -> list[str]:
 def transform_flags(text: str) -> list[str]:
     """Names of the obfuscation tricks detected in ``text`` (used as defender features)."""
     flags = []
+    if _TAG_RE.search(text):
+        flags.append("tag_smuggle")
+    if BIDI_RLO in text:
+        flags.append("bidi")
     if _ZW_RE.search(text):
         flags.append("invisible")
     if any(c in _HOMOGLYPH_BACK for c in text):
@@ -94,6 +121,8 @@ def transform_flags(text: str) -> list[str]:
 
 def canonicalize(text: str) -> str:
     t = unicodedata.normalize("NFKC", text)
+    t = _detag(t)
+    t = _unbidi(t)
     t = _ZW_RE.sub("", t)
     t = _fold_homoglyphs(t)
     hidden = decoded_payloads(t)  # decode *before* de-leeting, which would corrupt payloads

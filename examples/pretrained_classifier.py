@@ -7,7 +7,6 @@ specifically for this task and independent of Gauntlet's synthetic training data
 built-in defenders, it never saw any of Gauntlet's attack families during its own training, so
 its numbers are a genuine outside opinion, not just an out-of-fold one.
 """
-import numpy as np
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 

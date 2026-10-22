@@ -17,12 +17,12 @@ from __future__ import annotations
 import random
 
 import numpy as np
+import pandas as pd
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from .canonical import canonicalize, victim_understands
 from .evolve import _seeds, evolve
-from .families import FAMILIES
 
 MODEL_NAME = "typeform/distilbert-base-uncased-mnli"
 
@@ -54,7 +54,7 @@ def sample_attacks(df, n: int = 150, seed: int = 0) -> tuple[list[str], list[str
     rng = random.Random(seed)
     test = df[(df.split == "test") & (df.label == 1)]
     per_family = max(1, n // test.family.nunique())
-    rows = test.groupby("family", group_keys=False).apply(lambda g: g.sample(min(per_family, len(g)), random_state=seed))
+    rows = pd.concat([g.sample(min(per_family, len(g)), random_state=seed) for _, g in test.groupby("family")])
     idx = list(rows.index)
     rng.shuffle(idx)
     rows = rows.loc[idx[:n]]

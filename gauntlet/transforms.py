@@ -10,7 +10,7 @@ import base64
 import codecs
 import random
 import re
-from typing import Callable
+from collections.abc import Callable
 
 LEET = str.maketrans("aeiost", "431057")
 HOMOGLYPHS = {
@@ -18,6 +18,8 @@ HOMOGLYPHS = {
     "c": "с", "x": "х", "y": "у", "i": "і",
 }
 ZERO_WIDTH = "​"
+TAG_OFFSET = 0xE0000      # Unicode "tag" block: renders as nothing in most UIs
+BIDI_RLO, BIDI_PDF = "‮", "‬"   # right-to-left override / pop directional formatting
 
 DOC_SENTENCES = [
     "The quarterly report shows steady growth across all regions.",
@@ -111,12 +113,32 @@ def alt_case(text: str, rng: random.Random) -> str:
     return "".join(c.upper() if rng.random() < 0.5 else c.lower() for c in text)
 
 
+def tag_smuggle(text: str, rng: random.Random) -> str:
+    """ASCII smuggling: re-encode the payload as Unicode 'tag' characters behind a decoy
+    sentence. Most UIs render the tag block as nothing, so a human sees only the decoy
+    while a model reading the raw text sees decoy + payload."""
+    decoy = rng.choice([
+        "Thanks, that's all for now.", "Please just summarize this page.",
+        "Looks good, no changes needed.", "Nothing else to add here.",
+    ])
+    hidden = "".join(chr(TAG_OFFSET + ord(c)) if 0x20 <= ord(c) <= 0x7E else c for c in text)
+    return f"{decoy}{hidden}" if rng.random() < 0.5 else f"{hidden}{decoy}"
+
+
+def bidi_override(text: str, rng: random.Random) -> str:
+    """The 'Trojan Source' trick: wrap words in right-to-left override control characters
+    so a renderer displays them reversed/scrambled while the underlying bytes are untouched."""
+    def f(w: str) -> str:
+        return f"{BIDI_RLO}{w[::-1]}{BIDI_PDF}" if w.isalpha() and len(w) >= 4 else w
+    return _map_words(text, rng, f, 0.5)
+
+
 # --- semantic-ish rewrites ----------------------------------------------------
 def synonym_swap(text: str, rng: random.Random) -> str:
     out = text
     for word, alts in SYNONYMS.items():
         if rng.random() < 0.6:
-            out = re.sub(rf"\b{word}\b", lambda m: rng.choice(alts), out, count=1, flags=re.I)
+            out = re.sub(rf"\b{word}\b", lambda m, alts=alts: rng.choice(alts), out, count=1, flags=re.I)
     return out
 
 
@@ -214,4 +236,5 @@ MUTATORS: dict[str, Callable[[str, random.Random], str]] = {
     "doc_wrap": doc_wrap, "template_spoof": template_spoof, "quote_wrap": quote_wrap,
     "pad_words": pad_words, "pad_benign": pad_benign, "interleave": interleave,
     "b64_wrap": b64_wrap, "hex_wrap": hex_wrap, "rot13_wrap": rot13_wrap,
+    "tag_smuggle": tag_smuggle, "bidi_override": bidi_override,
 }
