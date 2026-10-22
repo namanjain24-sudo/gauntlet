@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from . import external
+from .canonical import visible
 from .corpus import build_dataset
 from .evolve import _seeds, evolve
 
@@ -148,7 +149,7 @@ def render(results: list[dict]) -> str:
         if r["arena"]["examples"]:
             out.append(f"\nevasions that beat '{r['name']}' (found {r['arena']['n_evasions']}):")
             for e in r["arena"]["examples"]:
-                out.append(f"  via {' -> '.join(e['lineage'])}\n    {e['text'][:160]}")
+                out.append(f"  via {' -> '.join(e['lineage'])}\n    {visible(e['text'])[:160]}")
     out.append("\nattacker success = share of an evolved population that evades the calibrated detector while a "
                "canonicalising victim can still read the goal. Built-in baselines were trained on these attack "
                "families, so their recall is in-distribution; a detector you bring was not.")

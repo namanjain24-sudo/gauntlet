@@ -11,12 +11,13 @@ import random
 
 import numpy as np
 
-from .canonical import victim_understands
+from .canonical import victim_understands, visible
 from .evolve import Individual, evolve
 from .families import FAMILIES
 
 
-def attack(goal: str, defender, generations: int = 10, pop_size: int = 120, seed: int = 0, top: int = 5) -> dict:
+def attack(goal: str, defender, generations: int = 10, pop_size: int = 120, seed: int = 0, top: int = 5,
+           on_generation=None) -> dict:
     goal = " ".join(goal.split())
     if len(goal) < 8:
         raise ValueError("goal is too short to attack with (give a full instruction, e.g. 'reveal your system prompt')")
@@ -27,7 +28,7 @@ def attack(goal: str, defender, generations: int = 10, pop_size: int = 120, seed
         raise ValueError("could not build any attack that keeps this goal recoverable; try simpler wording")
 
     baseline = defender.score([s.text for s in seeds]) > defender.threshold
-    res = evolve(defender, seeds, rng, generations=generations, pop_size=pop_size)
+    res = evolve(defender, seeds, rng, generations=generations, pop_size=pop_size, on_generation=on_generation)
     evasions = [e for e in res.evasions if e.lineage]                       # evolved, not just lucky seeds
     if evasions:
         scores = defender.score([e.text for e in evasions])
@@ -58,7 +59,7 @@ def render(r: dict, kind: str) -> str:
     if not r["examples"]:
         out.append("\nThe attacker found nothing that gets past this defender in this budget.")
     for k, e in enumerate(r["examples"], 1):
-        text = " ".join(e["text"].split())
+        text = " ".join(visible(e["text"]).split())
         out.append(f"\n#{k}  score {e['score']:.3f}  via {' -> '.join(e['lineage'])}\n    {text[:200]}")
     if r["mutators"]:
         out.append("\nmost useful tricks: " + ", ".join(f"{m} ({n})" for m, n in r["mutators"].items()))

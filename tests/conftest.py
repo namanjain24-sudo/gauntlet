@@ -1,6 +1,12 @@
+import os
+import tempfile
+
 import pytest
 
-from gauntlet.corpus import build_dataset
+# keep the model cache out of the developer's ~/.cache during tests
+os.environ.setdefault("GAUNTLET_CACHE", tempfile.mkdtemp(prefix="gauntlet-cache-"))
+
+from gauntlet.corpus import build_dataset  # noqa: E402
 
 
 @pytest.fixture(scope="session")

@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-from . import attack, bench, experiment, multilingual, report, scan
+from . import attack, bench, cache, experiment, multilingual, report, scan
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -53,9 +54,16 @@ def main(argv: list[str] | None = None) -> None:
     ml.add_argument("--defender", default="hardened")
     ml.add_argument("--frac", type=float, default=0.25, help="fraction of training benign text in German/French/Spanish")
     ml.add_argument("--seed", type=int, default=0)
-    sv = sub.add_parser("serve", help="local web playground (scan prompts, run the attacker) at http://127.0.0.1:8000")
-    sv.add_argument("--port", type=int, default=8000)
+    sv = sub.add_parser("serve", help="web playground (scan prompts, run the attacker); local by default, see --host")
+    sv.add_argument("--host", default="127.0.0.1", help="bind address; use 0.0.0.0 inside a container")
+    sv.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")), help="default $PORT or 8000")
     sv.add_argument("--kinds", default=",".join(experiment.KINDS), help="defenders to load")
+    sv.add_argument("--public", action="store_true",
+                    help="public-demo limits: stricter rate limits and a smaller attack budget (also: GAUNTLET_PUBLIC=1)")
+    wm = sub.add_parser("warm", help="train the linear defenders once and cache them, so scan/attack/serve start instantly")
+    wm.add_argument("--kinds", default=",".join(experiment.KINDS))
+    wm.add_argument("--seed", type=int, default=0)
+    wm.add_argument("--clear", action="store_true", help="delete the cache instead")
     rep = sub.add_parser("report", help="re-render report.html from an existing results.json")
     rep.add_argument("--out", type=Path, default=Path("reports"))
     args = ap.parse_args(argv)
@@ -131,7 +139,20 @@ def main(argv: list[str] | None = None) -> None:
         bad = [k for k in kinds if k not in experiment.ALL_KINDS]
         if bad:
             ap.error(f"unknown defender(s): {', '.join(bad)}")
-        serve.run(kinds, args.port)
+        serve.run(kinds, args.port, host=args.host, public=args.public or os.environ.get("GAUNTLET_PUBLIC") == "1")
+        return
+    if args.cmd == "warm":
+        if args.clear:
+            print(f"removed {cache.clear()} cached model(s) from {cache.cache_dir()}")
+            return
+        kinds = tuple(k.strip() for k in args.kinds.split(",") if k.strip())
+        bad = [k for k in kinds if k not in experiment.KINDS]
+        if bad:
+            ap.error(f"warm only caches the linear defenders ({', '.join(experiment.KINDS)}), not: {', '.join(bad)}")
+        if not cache.enabled():
+            ap.error("cache disabled by GAUNTLET_CACHE=0")
+        scan.train_defenders(kinds, seed=args.seed, log=print)
+        print(f"cached {', '.join(kinds)} in {cache.cache_dir()}")
         return
     if args.cmd == "run":
         if args.quick:

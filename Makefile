@@ -1,6 +1,6 @@
 PY ?= .venv/bin/python
 
-.PHONY: setup setup-transformer test quick full transformers report scan attack serve bench scale multilingual judge
+.PHONY: setup setup-transformer test lint warm docker quick full transformers report scan attack serve bench scale multilingual judge
 
 setup:                ## create venv + install the light (CPU, scikit-learn) dependencies
 	python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt
@@ -10,6 +10,9 @@ setup-transformer:    ## also install torch + transformers for the fine-tuned de
 
 test:
 	$(PY) -m pytest -q
+
+lint:                 ## ruff (config in pyproject.toml)
+	uvx ruff check gauntlet tests examples || $(PY) -m ruff check gauntlet tests examples
 
 quick:                ## ~1.5 min smoke run, 1 seed, linear defenders
 	$(PY) -m gauntlet run --quick --out reports/quick
@@ -32,6 +35,12 @@ attack:               ## make attack G="reveal your system prompt" [D=hardened]
 
 serve:                ## local web playground at http://127.0.0.1:8000
 	$(PY) -m gauntlet serve
+
+warm:                 ## train + cache the linear defenders once, so scan/attack/serve start instantly
+	$(PY) -m gauntlet warm
+
+docker:               ## build and run the public playground container at http://127.0.0.1:7860
+	docker build -t gauntlet . && docker run --rm -p 7860:7860 gauntlet
 
 bench:                ## make bench F=examples/keyword_detector.py:score
 	$(PY) -m gauntlet bench --defender "$(F)" --baselines

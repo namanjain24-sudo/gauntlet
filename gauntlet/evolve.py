@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import random
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -47,7 +48,9 @@ def _mutate(ind: Individual, rng: random.Random) -> Individual | None:
 def evolve(
     defender, seeds: list[Individual], rng: random.Random,
     generations: int = 10, pop_size: int = 300, elite_frac: float = 0.2, parent_frac: float = 0.4,
+    on_generation: Callable[[int, float], None] | None = None,
 ) -> EvolutionResult:
+    """Evolve ``seeds`` against ``defender``. ``on_generation(gen, asr)`` is called after each generation is scored."""
     pop = [rng.choice(seeds) for _ in range(pop_size)]
     result = EvolutionResult(asr_curve=[])
     found: dict[str, Individual] = {}
@@ -56,6 +59,8 @@ def evolve(
         scores = defender.score([i.text for i in pop])
         evades = scores <= defender.threshold          # every member is already victim-valid
         result.asr_curve.append(float(evades.mean()))
+        if on_generation is not None:
+            on_generation(gen, result.asr_curve[-1])
         for ind, ok in zip(pop, evades):
             if ok:
                 found.setdefault(ind.text, ind)

@@ -7,21 +7,41 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .canonical import canonicalize, transform_flags, visible
+from . import cache
+from .canonical import canonicalize, decoded_payloads, transform_flags, visible
 from .corpus import build_dataset
 from .defender import LINEAR_KINDS, make_defender
 
 
-def train_defenders(kinds=LINEAR_KINDS, seed: int = 0, df: pd.DataFrame | None = None, fpr: float = 0.01) -> dict:
-    """Fit each defender on the synthetic training split, thresholds calibrated on benign validation data."""
-    df = build_dataset(seed) if df is None else df
-    tr = df[df.split == "train"]
-    val = df[(df.split == "val") & (df.label == 0)].text
-    return {k: make_defender(k, fpr=fpr, seed=seed).fit(tr.text, tr.label).calibrate(val) for k in kinds}
+def train_defenders(kinds=LINEAR_KINDS, seed: int = 0, df: pd.DataFrame | None = None, fpr: float = 0.01,
+                    use_cache: bool = True, log=None) -> dict:
+    """Fit each defender on the synthetic training split, thresholds calibrated on benign validation data.
+
+    Linear defenders trained on the default corpus are cached on disk (see :mod:`gauntlet.cache`), so
+    repeat calls take well under a second. A custom ``df`` is never cached.
+    """
+    out: dict = {}
+    cacheable = use_cache and df is None
+    if cacheable:
+        for k in kinds:
+            if k in LINEAR_KINDS and (d := cache.load(k, seed, fpr)) is not None:
+                out[k] = d
+    todo = [k for k in kinds if k not in out]
+    if todo:
+        df = build_dataset(seed) if df is None else df
+        tr = df[df.split == "train"]
+        val = df[(df.split == "val") & (df.label == 0)].text
+        for k in todo:
+            if log:
+                log(f"training {k} ...")
+            out[k] = make_defender(k, fpr=fpr, seed=seed).fit(tr.text, tr.label).calibrate(val)
+            if cacheable and k in LINEAR_KINDS:
+                cache.save(out[k], k, seed, fpr)
+    return {k: out[k] for k in kinds}
 
 
 def scan(texts: list[str], defenders: dict) -> list[dict]:
-    """One row per text: what canonicalisation reveals, and each defender's score and verdict."""
+    """One row per text: what canonicalisation reveals (canonical view, detected tricks, decoded payloads), and each defender's score and verdict."""
     scores = {k: d.score(texts) for k, d in defenders.items()}
     rows = []
     for i, text in enumerate(texts):
@@ -30,6 +50,7 @@ def scan(texts: list[str], defenders: dict) -> list[dict]:
             "text": text,
             "canonical": canon if canon != text else None,
             "flags": transform_flags(text),
+            "decoded": [" ".join(h.split()) for h in decoded_payloads(text)],
             "verdicts": {k: {"score": float(scores[k][i]), "threshold": defenders[k].threshold,
                              "flagged": bool(scores[k][i] > defenders[k].threshold)} for k in defenders},
         })
@@ -49,6 +70,8 @@ def render(rows: list[dict]) -> str:
             out.append(f"  canonical view : {_clip(r['canonical'])}")
         if r["flags"]:
             out.append(f"  obfuscation    : {', '.join(r['flags'])}")
+        for h in r["decoded"]:
+            out.append(f"  decoded payload: {_clip(h)}")
         for kind, v in r["verdicts"].items():
             mark = "BLOCK" if v["flagged"] else "allow"
             out.append(f"  {kind:<21} {mark}  score {v['score']:.3f}  (threshold {v['threshold']:.3f})")
