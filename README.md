@@ -48,6 +48,8 @@ python -m gauntlet serve        # web playground on http://127.0.0.1:8000
 
 ## Tutorial
 
+Want the long version, every design decision, number and trade-off with the reasoning behind it? Read [docs/INTERVIEW_DEEP_DIVE.md](docs/INTERVIEW_DEEP_DIVE.md).
+
 A 90-second walkthrough of every command, CLI and web playground, recorded from a real session ([MP4 version](docs/tutorial.mp4)):
 
 ![Gauntlet tutorial: install, scan, attack, bench, serve, host, run](docs/tutorial.gif)
@@ -203,7 +205,7 @@ gauntlet/
   judge.py        a second (NLI-model) victim oracle, and comparison to the keyword one
   multilingual.py does non-English training data narrow the real-data AUC gap?
 examples/         keyword_detector.py, http_detector.py, pretrained_classifier.py (starting points for `bench`)
-docs/             tutorial.gif / tutorial.mp4, the recorded walkthrough embedded above
+docs/             tutorial.gif / tutorial.mp4 (the recorded walkthrough), INTERVIEW_DEEP_DIVE.md (every design decision explained), img/
 Dockerfile        the public playground image (models pre-trained at build time)
 tests/            73 tests, incl. HTTP servers spun up in-process for serve/bench
 ```
@@ -216,7 +218,7 @@ tests/            73 tests, incl. HTTP servers spun up in-process for serve/benc
 
 - Attacks and benign prompts are **synthetic and template-built**. The out-of-family and real-data numbers are the trustworthy ones; in-distribution numbers say little.
 - The **victim oracle is a keyword-recovery proxy**, not a real LLM. It may accept mutants a real model would not follow (e.g. heavy interleaving) and reject some it would.
-- **Calibration does not transfer.** 1% false positives on validation became about 3% on the test split for naive/hardened, and on real data the windowed models catch only ~18 to 35% of injections at their threshold despite the best AUC. Use AUC to compare, recall/FPR to see the operating-point problem.
+- **Calibration does not transfer.** The 1% false-positive threshold set on validation prompts gives 1.8% on the synthetic test split for naive (0 to 0.2% for the others), and on real data the windowed models catch only ~18 to 35% of injections at their threshold despite the best AUC. Use AUC to compare, recall/FPR to see the operating-point problem.
 - The real-data set is English + German while training data is English only; part of the AUC gap may be language, not attack style.
 - The transformer is **one small model (MiniLM-L6) with a short CPU-budget schedule**. The claim supported is "a small fine-tuned encoder does not close the gap", not "transformers can't". A larger model, more steps, or a model pretrained for injection detection is the obvious next test.
 - 3 seeds. Ranges across seeds are in the report's hover tooltips and data tables; differences of a point or two between defenders are within noise.
