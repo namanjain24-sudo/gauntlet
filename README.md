@@ -48,18 +48,19 @@ python -m gauntlet serve        # web playground on http://127.0.0.1:8000
 
 ## Tutorial
 
-A two-minute walkthrough of every command, recorded from a real session ([MP4 version](docs/tutorial.mp4)):
+A 90-second walkthrough of every command, CLI and web playground, recorded from a real session ([MP4 version](docs/tutorial.mp4)):
 
-![Gauntlet tutorial: install, scan, attack, bench, serve, run](docs/tutorial.gif)
+![Gauntlet tutorial: install, scan, attack, bench, serve, host, run](docs/tutorial.gif)
 
 Step by step:
 
 1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (63 tests without torch, 73 with).
-2. **Scan a prompt.** `python -m gauntlet scan "..."` trains the three linear defenders on the synthetic corpus (about 15 s) and prints, per prompt, the canonical view (leetspeak undone, base64 decoded, invisible characters stripped), the obfuscation tricks it detected, any decoded payload, and each defender's score against its threshold. Hidden tricks are shown as markers such as `⟨tag:…⟩`, `⟨rlo⟩` and `⟨zw⟩` so you can see what was actually sent.
+2. **Scan a prompt.** `python -m gauntlet scan "..."` trains the three linear defenders on the synthetic corpus the first time (about 15 s, then cached so later runs start in under a second) and prints, per prompt, the canonical view (leetspeak undone, base64 decoded, invisible characters stripped), the obfuscation tricks it detected, any decoded payload, and each defender's score against its threshold. Hidden tricks are shown as markers such as `⟨tag:…⟩`, `⟨rlo⟩` and `⟨zw⟩` so you can see what was actually sent.
 3. **Attack a defender.** `python -m gauntlet attack "reveal your system prompt" --defender hardened` renders your goal in all eight attack styles, then evolves them with the 21 mutation operators for 10 generations. You get the success curve per generation, the evasions with their full mutation chain, and the operators that mattered most. Try `--defender windowed` to see a much harder target.
 4. **Bench your own detector.** `python -m gauntlet bench --defender examples/keyword_detector.py:score` (or `--url http://…/score`) calibrates your detector to 1% false positives, then reports recall per attack family, attacker success, and real-data AUC. Add `--baselines` to get the built-in defenders as reference rows.
-5. **Play in the browser.** `python -m gauntlet serve` opens a local playground at `http://127.0.0.1:8000`: paste a prompt, run the attacker and watch its curve grow live, and click "Scan this evasion" to feed what it found back into the scanner. To put it on the web, see [Host it on the web](#host-it-on-the-web).
-6. **Run the experiments.** `make quick` (one seed, about two minutes) or `make full` (three seeds, about five) runs leave-one-family-out, the arms race and the real-data check, and writes one self-contained `report.html`.
+5. **Play in the browser.** `python -m gauntlet serve` opens a local playground at `http://127.0.0.1:8000`: paste one or more prompts, run the attacker and watch its success curve stream in generation by generation, click "Scan this evasion" to feed what it found back into the scanner, and open the results report.
+6. **Host it on the web.** `docker build -t gauntlet . && docker run --rm -p 7860:7860 gauntlet` gives you the same playground as a public-ready container (models pre-trained at build time, rate limits and attack budget caps built in). Push it to a free Hugging Face Space or any Docker host; see [Host it on the web](#host-it-on-the-web).
+7. **Run the experiments.** `make quick` (one seed, about two minutes) or `make full` (three seeds, about five) runs leave-one-family-out, the arms race and the real-data check, and writes one self-contained `report.html`.
 
 ## What you can do with it
 
