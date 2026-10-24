@@ -1,7 +1,7 @@
 """On-disk cache of trained linear defenders, so ``scan`` / ``attack`` / ``serve`` start in under a second.
 
 Training the three linear defenders on the synthetic corpus takes ~15 s. The result depends only on
-(kind, seed, fpr), the corpus/transform/defender source code and the scikit-learn version, so the cache
+(kind, seed, fpr), the corpus/transform/defender source code and the scikit-learn/numpy versions, so the cache
 key is a hash of exactly those. Any code change or library upgrade silently invalidates old entries.
 
 Location: ``$GAUNTLET_CACHE`` or ``~/.cache/gauntlet``. Set ``GAUNTLET_CACHE=0`` to disable.
@@ -13,6 +13,7 @@ import os
 import pickle
 from pathlib import Path
 
+import numpy
 import sklearn
 
 from . import canonical, corpus, defender, families, transforms
@@ -31,7 +32,7 @@ def cache_dir() -> Path:
 
 def fingerprint() -> str:
     """Hash of everything a trained linear defender depends on."""
-    h = hashlib.sha256(sklearn.__version__.encode())
+    h = hashlib.sha256(f"sklearn={sklearn.__version__};numpy={numpy.__version__}".encode())
     for m in _SOURCES:
         h.update(Path(m.__file__).read_bytes())
     return h.hexdigest()[:16]

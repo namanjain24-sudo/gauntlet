@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
+import traceback
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -27,6 +29,19 @@ from . import attack, scan
 from .canonical import visible
 
 MAX_BODY, MAX_TEXT, MAX_TEXTS, MAX_GOAL = 200_000, 5_000, 20, 300
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SystemExit(f"{name} must be an integer, got {raw!r}") from None
+    if value < minimum:
+        raise SystemExit(f"{name} must be at least {minimum}, got {value}")
+    return value
 
 
 @dataclass
@@ -45,11 +60,11 @@ class Config:
     @classmethod
     def from_env(cls, public: bool = False) -> Config:
         c = cls(max_pop=80, max_gens=8, default_pop=60, default_gens=6, scan_per_min=30, attack_per_10min=4) if public else cls()
-        c.max_pop = int(os.environ.get("GAUNTLET_MAX_POP", c.max_pop))
-        c.max_gens = int(os.environ.get("GAUNTLET_MAX_GENS", c.max_gens))
+        c.max_pop = _env_int("GAUNTLET_MAX_POP", c.max_pop, 20)
+        c.max_gens = _env_int("GAUNTLET_MAX_GENS", c.max_gens, 1)
         c.default_pop, c.default_gens = min(c.default_pop, c.max_pop), min(c.default_gens, c.max_gens)
-        c.scan_per_min = int(os.environ.get("GAUNTLET_SCAN_PER_MIN", c.scan_per_min))
-        c.attack_per_10min = int(os.environ.get("GAUNTLET_ATTACK_PER_10MIN", c.attack_per_10min))
+        c.scan_per_min = _env_int("GAUNTLET_SCAN_PER_MIN", c.scan_per_min, 1)
+        c.attack_per_10min = _env_int("GAUNTLET_ATTACK_PER_10MIN", c.attack_per_10min, 1)
         c.trust_proxy = os.environ.get("GAUNTLET_TRUST_PROXY", "1" if c.trust_proxy else "0") == "1"
         c.report = Path(os.environ.get("GAUNTLET_REPORT", str(c.report)))
         return c
@@ -63,7 +78,8 @@ class RateLimiter:
         self._hits: dict[str, deque] = defaultdict(deque)
         self._lock = threading.Lock()
 
-    def allow(self, key: str, now: float | None = None) -> bool:
+    def allow(self, key: str, now: float | None = None, consume: bool = True) -> bool:
+        """True if ``key`` is under its limit. With ``consume=False`` only checks, without recording a hit."""
         now = time.monotonic() if now is None else now
         with self._lock:
             q = self._hits[key]
@@ -71,6 +87,8 @@ class RateLimiter:
                 q.popleft()
             if len(q) >= self.limit:
                 return False
+            if not consume:
+                return True
             q.append(now)
             if len(self._hits) > 10_000:                       # forget idle clients
                 for k in [k for k, v in self._hits.items() if not v or v[-1] <= now - self.window]:
@@ -136,7 +154,10 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
                     return fwd.split(",")[0].strip()
             return self.client_address[0]
 
+        _headers_sent = False
+
         def _headers(self, code: int, ctype: str, length: int | None = None) -> None:
+            self._headers_sent = True
             self.send_response(code)
             self.send_header("Content-Type", f"{ctype}; charset=utf-8")
             if length is not None:
@@ -172,7 +193,16 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
 
         # ---- GET ----------------------------------------------------------------------------
         def do_GET(self):
-            url = urlsplit(self.path)
+            try:
+                self._get(urlsplit(self.path))
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                pass                                   # client went away
+            except Exception:  # noqa: BLE001
+                traceback.print_exc(file=sys.stderr)
+                if not self._headers_sent:
+                    self._json(500, {"error": "internal error"})
+
+        def _get(self, url):
             if url.path == "/":
                 self._send(200, page, "text/html")
             elif url.path == "/api/health":
@@ -195,7 +225,8 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
                 goal, kind, gens, pop = self._attack_params(params)
             except (ValueError, TypeError) as exc:
                 return self._json(400, {"error": str(exc)})
-            if not attack_rl.allow(self._client()):
+            client = self._client()
+            if not attack_rl.allow(client, consume=False):
                 return self._json(429, {"error": f"rate limit: {cfg.attack_per_10min} attacks per 10 minutes per client"})
             self._headers(200, "text/event-stream")
 
@@ -207,6 +238,8 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
                 if not slot.acquire(on_wait=lambda: emit("queued", {"busy": True})):
                     return emit("error", {"error": "the attacker is busy, try again in a minute"})
                 try:
+                    if not attack_rl.allow(client):                       # count it only once the attack really starts
+                        return emit("error", {"error": f"rate limit: {cfg.attack_per_10min} attacks per 10 minutes per client"})
                     emit("start", {"defender": kind, "generations": gens, "pop": pop})
                     res = attack.attack(goal, defenders[kind], gens, pop,
                                         on_generation=lambda g, asr: emit("progress", {"generation": g, "asr": asr}))
@@ -219,6 +252,12 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
                 emit("error", {"error": str(exc)})
             except (BrokenPipeError, ConnectionResetError):
                 pass                                   # client went away; the attack budget is bounded anyway
+            except Exception:  # noqa: BLE001
+                traceback.print_exc(file=sys.stderr)
+                try:
+                    emit("error", {"error": "internal error"})
+                except OSError:
+                    pass
 
         # ---- POST ---------------------------------------------------------------------------
         def do_POST(self):
@@ -243,11 +282,14 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
                     return self._json(200, {"rows": rows})
                 if self.path == "/api/attack":
                     goal, kind, gens, pop = self._attack_params(body)
-                    if not attack_rl.allow(self._client()):
+                    client = self._client()
+                    if not attack_rl.allow(client, consume=False):
                         return self._json(429, {"error": f"rate limit: {cfg.attack_per_10min} attacks per 10 minutes per client"})
                     if not slot.acquire():
                         return self._json(503, {"error": "the attacker is busy, try again in a minute"})
                     try:
+                        if not attack_rl.allow(client):
+                            return self._json(429, {"error": f"rate limit: {cfg.attack_per_10min} attacks per 10 minutes per client"})
                         res = attack.attack(goal, defenders[kind], gens, pop)
                     finally:
                         slot.release()
@@ -257,6 +299,12 @@ def make_server(defenders: dict, port: int = 8000, host: str = "127.0.0.1", conf
                 self._json(404, {"error": "not found"})
             except (ValueError, KeyError, TypeError) as exc:
                 self._json(400, {"error": str(exc)})
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                pass                                   # client went away mid-request
+            except Exception:  # noqa: BLE001 - a bug must surface as a 500, not a dropped connection
+                traceback.print_exc(file=sys.stderr)
+                if not self._headers_sent:
+                    self._json(500, {"error": "internal error"})
 
     srv = ThreadingHTTPServer((host, port), Handler)
     srv.daemon_threads = True

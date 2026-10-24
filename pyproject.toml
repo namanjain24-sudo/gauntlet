@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "pandas", "scikit-learn", "certifi"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "ruff"]
 transformer = ["torch", "transformers"]
 
 [project.scripts]

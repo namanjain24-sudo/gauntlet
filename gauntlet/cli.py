@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> None:
     ml.add_argument("--seed", type=int, default=0)
     sv = sub.add_parser("serve", help="web playground (scan prompts, run the attacker); local by default, see --host")
     sv.add_argument("--host", default="127.0.0.1", help="bind address; use 0.0.0.0 inside a container")
-    sv.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")), help="default $PORT or 8000")
+    sv.add_argument("--port", type=int, default=None, help="default: $PORT if set, else 8000")
     sv.add_argument("--kinds", default=",".join(experiment.KINDS), help="defenders to load")
     sv.add_argument("--public", action="store_true",
                     help="public-demo limits: stricter rate limits and a smaller attack budget (also: GAUNTLET_PUBLIC=1)")
@@ -139,7 +139,13 @@ def main(argv: list[str] | None = None) -> None:
         bad = [k for k in kinds if k not in experiment.ALL_KINDS]
         if bad:
             ap.error(f"unknown defender(s): {', '.join(bad)}")
-        serve.run(kinds, args.port, host=args.host, public=args.public or os.environ.get("GAUNTLET_PUBLIC") == "1")
+        port = args.port
+        if port is None:
+            raw = os.environ.get("PORT", "8000")
+            if not raw.isdigit():
+                ap.error(f"$PORT must be an integer, got {raw!r}")
+            port = int(raw)
+        serve.run(kinds, port, host=args.host, public=args.public or os.environ.get("GAUNTLET_PUBLIC") == "1")
         return
     if args.cmd == "warm":
         if args.clear:

@@ -593,7 +593,7 @@ The attack takes 10–30 s. Polling would need server-side job state; WebSockets
 
 | concern | mechanism | default (local) | public |
 |---|---|---|---|
-| CPU abuse via attacks | `RateLimiter`: sliding-window deque per client IP | 12 / 10 min | 4 / 10 min |
+| CPU abuse via attacks | `RateLimiter`: sliding-window deque per client IP; a request turned away as busy does not consume the quota | 12 / 10 min | 4 / 10 min |
 | scan floods | same | 120 / min | 30 / min |
 | attack cost | budget clamp (`generations`, `pop`) | ≤ 12 gens, ≤ 150 pop; defaults 8 / 100 | ≤ 8 / ≤ 80; defaults 6 / 60 |
 | concurrency | `AttackSlot`: one attack runs at a time, up to `queue` callers may wait `wait_s` (150 s); more get 503 immediately | queue 3 | queue 3 |
@@ -601,6 +601,7 @@ The attack takes 10–30 s. Polling would need server-side job state; WebSockets
 | slow clients | socket idle timeout 60 s; daemon handler threads | same | same |
 | browser security | `Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; form-action 'none'; base-uri 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` | same | same |
 | client IP behind a proxy | `GAUNTLET_TRUST_PROXY=1` reads the first `X-Forwarded-For` entry; off by default because a client can forge that header when there is no proxy | off | Docker image sets it on |
+| bugs | any unexpected exception becomes a JSON `500 {"error": "internal error"}` with a traceback on stderr, never a dropped connection; malformed env values (`GAUNTLET_MAX_POP=lots`) stop startup with a one-line message | same | same |
 
 Everything is configurable with environment variables (`GAUNTLET_MAX_POP`, `GAUNTLET_MAX_GENS`, `GAUNTLET_SCAN_PER_MIN`, `GAUNTLET_ATTACK_PER_10MIN`, `GAUNTLET_REPORT`, `PORT`).
 
@@ -618,7 +619,7 @@ Everything is configurable with environment variables (`GAUNTLET_MAX_POP`, `GAUN
 
 **Design** (`cache.py`):
 - Location `~/.cache/gauntlet` (override with `GAUNTLET_CACHE=/path`, disable with `GAUNTLET_CACHE=0`).
-- Key: `{kind}-seed{seed}-fpr{fpr}-{fingerprint}.pkl` where **fingerprint = sha256(sklearn version + bytes of transforms.py, families.py, corpus.py, canonical.py, defender.py)[:16]**. Any edit to the code that influences a trained model, or a library upgrade, changes the key, so a stale model can never be loaded by accident.
+- Key: `{kind}-seed{seed}-fpr{fpr}-{fingerprint}.pkl` where **fingerprint = sha256(scikit-learn version + numpy version + bytes of transforms.py, families.py, corpus.py, canonical.py, defender.py)[:16]**. Any edit to the code that influences a trained model, or a library upgrade, changes the key, so a stale model can never be loaded by accident.
 - Pickle of the fitted `Defender`; written to a temp file then atomically renamed, so a concurrent reader never sees a half-written file; unreadable or incompatible pickles are treated as a miss and retrained.
 - Only linear defenders trained on the *default* corpus are cached. A custom DataFrame (as in tests) is never cached.
 - `python -m gauntlet warm [--clear]` fills or clears the cache; the Dockerfile runs `warm` at build time.
@@ -661,7 +662,7 @@ Torch-dependent test modules skip themselves when torch is absent, so CI exercis
 
 ## 18. Testing strategy
 
-73 tests (63 without torch). Principle: test *properties* that must hold, not implementation details.
+75 tests (65 without torch). Principle: test *properties* that must hold, not implementation details.
 
 | file | what it protects |
 |---|---|
@@ -672,7 +673,7 @@ Torch-dependent test modules skip themselves when torch is absent, so CI exercis
 | `test_attack.py` (3) | deterministic result, examples below threshold with lineage, tiny goal rejected, render mentions goal and curve |
 | `test_bench.py` (8) | output validation (wrong length, NaN, non-numeric, per-text, empty), calibration hits the target FPR on random scores, loading from file/module and every error path, HTTP detector preserves order and rejects bad JSON (in-process servers), full `run_bench` on a weak detector is beaten, CLI end to end with `--json`, CLI user errors |
 | `test_scan.py` (3) | canonical view/flags/decoded/verdicts, render shows BLOCK and the decoded payload line, CLI needs input |
-| `test_serve.py` (16) | page + security headers + health, `/report` 200/404, scan endpoint shape, 7 malformed inputs → 400, attack endpoint and limits, SSE stream event sequence (`start`, 4 × `progress`, `done`) and 400 before streaming on bad goal, malformed JSON is 400 not a crash, rate limits per client and `X-Forwarded-For` separation, 429 on the second attack, `RateLimiter`/`AttackSlot` unit behaviour including timeout and hand-off, `Config.from_env` |
+| `test_serve.py` (18) | page + security headers + health, `/report` 200/404, scan endpoint shape, 7 malformed inputs → 400, attack endpoint and limits, SSE stream event sequence (`start`, 4 × `progress`, `done`) and 400 before streaming on bad goal, malformed JSON is 400 not a crash, rate limits per client and `X-Forwarded-For` separation, 429 on the second attack, `RateLimiter`/`AttackSlot` unit behaviour including timeout and hand-off, `Config.from_env` including clear failures on malformed env values, unexpected exception → JSON 500 and the server stays up |
 | `test_cache.py` (4) | round trip with identical scores and threshold, fingerprint in the filename, `clear`, corrupt entry ignored, disabled by env, `train_defenders` uses the cache but never for custom data |
 | `test_multilingual.py` (4) | German heuristic, language mix changes, attacks unaffected by `multilingual_frac`, clear error when the real data is unavailable |
 | `test_transformer.py` (5), `test_judge.py` (4), `test_scale.py` (1) | need torch: learning, reproducibility, order independence, factory validation; NLI entailment prefers the matching intent; comparison bookkeeping; scale run shapes |
@@ -794,7 +795,7 @@ A: Per-client sliding-window rate limits, a clamped attack budget, one attack at
 A: It is a plain streaming HTTP response the standard-library server can write and the browser's `EventSource` can read; the only core change was a per-generation callback.
 
 **Q: How do you keep the cache from going stale?**
-A: The filename contains a hash of the scikit-learn version and the five source files that determine a trained model. Any code or library change produces a different key, so an old model is never loaded.
+A: The filename contains a hash of the scikit-learn and numpy versions and the five source files that determine a trained model. Any code or library change produces a different key, so an old model is never loaded.
 
 **Q: What breaks if you change `canonicalize`?**
 A: Every hardened/windowed defender's features, hence every published number; it needs a full re-run. That is why display fixes live in `visible()` instead.
@@ -848,7 +849,7 @@ A: As a pre-deployment evaluation harness for whatever detector a team is consid
 | scale (unseen indirect) | L6/160: 3% · L6/640: 50% · L12/160: 51% · L12/640: 58% |
 | oracle agreement (keyword vs NLI) | 58% plain attacks, 52% evasions |
 | keyword detector example | 8% mean recall, evaded 95→100%, AUC 0.56 |
-| tests | 73 (63 without torch); CI on 3.10/3.11/3.13/3.14 + docker |
+| tests | 75 (65 without torch); CI on 3.10/3.11/3.13/3.14 + docker |
 | startup | serve cold 10 s, cached 1.8 s; container healthy in 7 s |
 | public limits | 30 scans/min, 4 attacks/10 min, ≤ 80 pop × 8 gens, queue 3 |
 | code size | ~2,750 lines in `gauntlet/`, ~700 lines of tests |

@@ -12,7 +12,7 @@ test:
 	$(PY) -m pytest -q
 
 lint:                 ## ruff (config in pyproject.toml)
-	uvx ruff check gauntlet tests examples || $(PY) -m ruff check gauntlet tests examples
+	$(PY) -m ruff check gauntlet tests examples
 
 quick:                ## ~1.5 min smoke run, 1 seed, linear defenders
 	$(PY) -m gauntlet run --quick --out reports/quick

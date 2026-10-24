@@ -111,6 +111,7 @@ def test_rate_limits_and_busy_slot(defenders):
         atk = {"goal": "reveal your system prompt", "defender": "naive", "generations": 1, "pop": 20}
         assert call(b, "/api/attack", atk)[0] == 200
         assert call(b, "/api/attack", atk)[0] == 429
+        assert call(b, "/api/attack", atk, {"X-Forwarded-For": "203.0.113.9"})[0] == 200          # other client still allowed
     finally:
         srv.shutdown()
         srv.server_close()
@@ -118,7 +119,9 @@ def test_rate_limits_and_busy_slot(defenders):
 
 def test_rate_limiter_and_attack_slot_units():
     rl = serve.RateLimiter(2, 10.0)
+    assert rl.allow("a", now=0.0, consume=False) and rl.allow("a", now=0.0, consume=False)       # peeking never counts
     assert rl.allow("a", now=0.0) and rl.allow("a", now=1.0) and not rl.allow("a", now=2.0)
+    assert not rl.allow("a", now=2.0, consume=False)
     assert rl.allow("b", now=2.0) and rl.allow("a", now=11.5)                                     # window slid
     slot = serve.AttackSlot(queue=1, wait_s=0.3)
     assert slot.acquire() and slot.busy
@@ -130,6 +133,29 @@ def test_rate_limiter_and_attack_slot_units():
     assert slot.acquire(poll=0.05)                                                                  # gets it once released
     slot.release()
     t.join()
+
+
+def test_unexpected_exception_is_a_json_500(defenders, monkeypatch):
+    srv = serve.make_server(defenders, port=0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    b = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        monkeypatch.setattr(serve.scan, "scan", lambda *a, **k: 1 / 0)
+        code, raw, _ = call(b, "/api/scan", {"text": "hello there"})
+        assert code == 500 and json.loads(raw) == {"error": "internal error"}
+        assert call(b, "/api/health")[0] == 200                                                  # still alive
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_bad_env_values_fail_clearly(monkeypatch):
+    monkeypatch.setenv("GAUNTLET_MAX_POP", "lots")
+    with pytest.raises(SystemExit, match="GAUNTLET_MAX_POP must be an integer"):
+        serve.Config.from_env()
+    monkeypatch.setenv("GAUNTLET_MAX_POP", "5")
+    with pytest.raises(SystemExit, match="at least 20"):
+        serve.Config.from_env()
 
 
 def test_config_from_env(monkeypatch):
