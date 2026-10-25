@@ -52,9 +52,23 @@ def scan(texts: list[str], defenders: dict) -> list[dict]:
             "flags": transform_flags(text),
             "decoded": [" ".join(h.split()) for h in decoded_payloads(text)],
             "verdicts": {k: {"score": float(scores[k][i]), "threshold": defenders[k].threshold,
-                             "flagged": bool(scores[k][i] > defenders[k].threshold)} for k in defenders},
+                             "flagged": bool(scores[k][i] > defenders[k].threshold),
+                             **_where(defenders[k], text)} for k in defenders},
         })
     return rows
+
+
+def _where(defender, text: str) -> dict:
+    """For windowed defenders that flag a text: the window that fired, if it is not just the whole text."""
+    explain = getattr(defender, "explain", None)
+    if explain is None:
+        return {}
+    e = explain(text)
+    if e is None or e["score"] <= defender.threshold:
+        return {}
+    whole = " ".join(canonicalize(text).split())
+    window = " ".join(e["window"].split())
+    return {"window": window} if window != whole else {}
 
 
 def _clip(s: str, n: int = 110) -> str:
@@ -75,4 +89,6 @@ def render(rows: list[dict]) -> str:
         for kind, v in r["verdicts"].items():
             mark = "BLOCK" if v["flagged"] else "allow"
             out.append(f"  {kind:<21} {mark}  score {v['score']:.3f}  (threshold {v['threshold']:.3f})")
+            if v.get("window"):
+                out.append(f"  {'':<21} fired on: \"{_clip(v['window'], 90)}\"")
     return "\n".join(out)

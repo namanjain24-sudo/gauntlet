@@ -89,7 +89,9 @@ def test_http_defender_rejects_bad_response(service):
 
 def test_run_bench_shapes_and_weak_detector_is_beaten(small_df):
     d = bench.CallableDefender(bench.load_callable(f"{EXAMPLE}:score"), "keywords")
-    r = bench.run_bench(d, df=small_df, generations=4, pop_size=40, n_intents=15, external_cache=None)
+    lines = []
+    r = bench.run_bench(d, df=small_df, generations=4, pop_size=40, n_intents=15, external_cache=None, log=lines.append)
+    assert any("calibrating" in ln for ln in lines) and sum("  generation " in ln for ln in lines) == 5
     assert set(r["recall_by_family"]) == set(small_df[small_df.label == 1].family)
     assert 0 <= r["fpr_test"] <= 1 and r["external"] is None
     assert len(r["arena"]["curve"]) == 5 and r["arena"]["asr_end"] > 0.5      # a keyword list is easy to evade

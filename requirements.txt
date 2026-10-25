@@ -2,5 +2,3 @@ numpy
 pandas
 scikit-learn
 certifi
-pytest
-ruff

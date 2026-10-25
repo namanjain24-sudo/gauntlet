@@ -1,5 +1,7 @@
 # Gauntlet
 
+[![ci](https://github.com/namanjain24-sudo/gauntlet/actions/workflows/ci.yml/badge.svg)](https://github.com/namanjain24-sudo/gauntlet/actions/workflows/ci.yml)
+
 **An adversarial arena that measures whether a prompt-injection defense survives attacks it has never seen, and lets you throw your own detector into it.**
 
 Most detectors report "99% accuracy" on a test set drawn from the distribution they trained on. The question a team actually has is different: *what happens when a new kind of attack shows up?* Gauntlet answers it with an evolutionary attacker, leave-one-family-out testing, and a check on real human-written injections. Everything runs on a laptop CPU, no API keys.
@@ -34,8 +36,8 @@ Caveats that matter: one small transformer with a fixed 160-step CPU budget per 
 
 ```bash
 git clone <this repo> && cd gauntlet
-make setup                      # python venv + numpy/pandas/scikit-learn (no torch needed)
-make test                       # 75 tests (without torch: 65 run, transformer/judge/scale modules skip)
+make setup                      # python venv + numpy/pandas/scikit-learn + pytest/ruff (no torch needed)
+make test                       # 77 tests (without torch: 67 run, transformer/judge/scale modules skip)
 make quick                      # ~1.5 min smoke run -> reports/quick/report.html
 ```
 
@@ -56,7 +58,7 @@ A 90-second walkthrough of every command, CLI and web playground, recorded from 
 
 Step by step:
 
-1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (65 tests without torch, 75 with).
+1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (67 tests without torch, 77 with).
 2. **Scan a prompt.** `python -m gauntlet scan "..."` trains the three linear defenders on the synthetic corpus the first time (about 15 s, then cached so later runs start in under a second) and prints, per prompt, the canonical view (leetspeak undone, base64 decoded, invisible characters stripped), the obfuscation tricks it detected, any decoded payload, and each defender's score against its threshold. Hidden tricks are shown as markers such as `⟨tag:…⟩`, `⟨rlo⟩` and `⟨zw⟩` so you can see what was actually sent.
 3. **Attack a defender.** `python -m gauntlet attack "reveal your system prompt" --defender hardened` renders your goal in all eight attack styles, then evolves them with the 21 mutation operators for 10 generations. You get the success curve per generation, the evasions with their full mutation chain, and the operators that mattered most. Try `--defender windowed` to see a much harder target.
 4. **Bench your own detector.** `python -m gauntlet bench --defender examples/keyword_detector.py:score` (or `--url http://…/score`) calibrates your detector to 1% false positives, then reports recall per attack family, attacker success, and real-data AUC. Add `--baselines` to get the built-in defenders as reference rows.
@@ -77,7 +79,7 @@ Step by step:
   windowed              BLOCK  score 0.998  (threshold 0.878)
 ```
 
-Takes prompts as arguments, `--file`, or stdin. `--json` for machine-readable output, `--kinds` to add `transformer`.
+Takes prompts as arguments, `--file`, or stdin. `--json` for machine-readable output, `--kinds` to add `transformer`. When the windowed defender blocks a long document, it also prints which window fired (`fired on: "ignore all previous instructions and …"`), so you can see *where* the injection sits.
 
 ### `attack`: red-team a defender with your own goal
 
@@ -126,7 +128,7 @@ python -m gauntlet bench --defender mypkg.guard:score_batch          # your own 
 python -m gauntlet bench --url http://localhost:9000/score           # POST {"text": ...} -> {"score": 0.93}
 ```
 
-Your detector is calibrated to 1% false positives on benign validation prompts, then measured on recall per attack family, an evolutionary attacker, and AUC on real human-written injections. `--baselines` adds the built-in defenders as reference rows; `--json out.json` saves everything. The included example (a keyword list) gets 8% mean recall and is evaded 93 to 100% of the time.
+Your detector is calibrated to 1% false positives on benign validation prompts, then measured on recall per attack family, an evolutionary attacker, and AUC on real human-written injections. Progress is printed to stderr (the result table goes to stdout, so it pipes cleanly). `--baselines` adds the built-in defenders as reference rows; `--json out.json` saves everything. The included example (a keyword list) gets 8% mean recall and is evaded 93 to 100% of the time.
 
 Note for reading results: the built-in baselines are trained on these attack families, so their recall column is in-distribution; a detector you bring was not trained on them. `examples/pretrained_classifier.py` benches a real independently-trained model this way — see [Follow-up experiments](#follow-up-experiments) for what it found.
 
@@ -207,12 +209,12 @@ gauntlet/
 examples/         keyword_detector.py, http_detector.py, pretrained_classifier.py (starting points for `bench`)
 docs/             tutorial.gif / tutorial.mp4 (the recorded walkthrough), INTERVIEW_DEEP_DIVE.md (every design decision explained), img/
 Dockerfile        the public playground image (models pre-trained at build time)
-tests/            75 tests, incl. HTTP servers spun up in-process for serve/bench
+tests/            77 tests, incl. HTTP servers spun up in-process for serve/bench
 ```
 
 ## Testing
 
-`make test` runs 75 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, the model cache, the playground's rate limits, attack queue and progress stream, and the NLI judge comparison. CI runs the suite and a `--quick` experiment on Python 3.10, 3.11, 3.13 and 3.14, plus `ruff check` (config in `pyproject.toml`; `make lint` runs the same thing locally). The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
+`make test` runs 77 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, the model cache, the playground's rate limits, attack queue and progress stream, and the NLI judge comparison. CI runs the suite and a `--quick` experiment on Python 3.10, 3.11, 3.13 and 3.14, plus `ruff check` (config in `pyproject.toml`; `make lint` runs the same thing locally). The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
 
 ## Limitations
 
@@ -220,7 +222,7 @@ tests/            75 tests, incl. HTTP servers spun up in-process for serve/benc
 - The **victim oracle is a keyword-recovery proxy**, not a real LLM. It may accept mutants a real model would not follow (e.g. heavy interleaving) and reject some it would.
 - **Calibration does not transfer.** The 1% false-positive threshold set on validation prompts gives 1.8% on the synthetic test split for naive (0 to 0.2% for the others), and on real data the windowed models catch only ~18 to 35% of injections at their threshold despite the best AUC. Use AUC to compare, recall/FPR to see the operating-point problem.
 - The real-data set is English + German while training data is English only; part of the AUC gap may be language, not attack style.
-- The transformer is **one small model (MiniLM-L6) with a short CPU-budget schedule**. The claim supported is "a small fine-tuned encoder does not close the gap", not "transformers can't". A larger model, more steps, or a model pretrained for injection detection is the obvious next test.
+- The transformer is **ne small model (MiniLM-L6) with a short CPU-budget schedule**. The claim supported is "a small fine-tuned encoder does not close the gap", not "transformers can't". A larger model, more steps, or a model pretrained for injection detection is the obvious next test.
 - 3 seeds. Ranges across seeds are in the report's hover tooltips and data tables; differences of a point or two between defenders are within noise.
 - `serve` and `bench` are research instruments on a toy corpus, not a production filter or a certification.
 

@@ -533,7 +533,7 @@ For `hardened` the German-subset AUC did not move (0.62 → 0.62); the *English*
 
 `python -m gauntlet scan "prompt" ["prompt2" …] [--file f] [--kinds naive,hardened,windowed,transformer] [--json]`, or prompts on stdin.
 
-Trains (or loads from cache) the defenders, then per prompt prints: the prompt with invisible characters made visible, the **canonical view** if it differs, the **obfuscation flags**, any **decoded payload** (base64/hex/ROT13 contents on their own line), and each defender's **score vs threshold** with BLOCK/allow.
+Trains (or loads from cache) the defenders, then per prompt prints: the prompt with invisible characters made visible, the **canonical view** if it differs, the **obfuscation flags**, any **decoded payload** (base64/hex/ROT13 contents on their own line), and each defender's **score vs threshold** with BLOCK/allow. When the windowed defender blocks a long document it adds `fired on: "…"`, the sentence window that produced the score (`Defender.explain`), which is the explainability payoff of windowing: it shows *where* the injection sits. The web page shows the same line under the verdict card.
 
 ![scan output](img/cli-scan.png)
 
@@ -554,7 +554,7 @@ In the recorded run: hardened caught 100% of 32 plain attacks; ASR 0% → 75% ov
 - **Protocol**: a function `list[str] -> list[float]` (higher = more suspicious), or `--per-text` for `str -> float`, or an HTTP endpoint taking `POST {"text": …}` and returning `{"score": …}` (8 worker threads, 30 s timeout).
 - `CallableDefender` wraps it in the standard interface and **validates** output: right length, numeric, finite; readable errors otherwise ("use --per-text if your function takes a single string").
 - `load_callable` imports `pkg.module:function` or executes `path/file.py` and fetches the function, with clear errors for missing files/modules/functions.
-- `run_bench`: calibrate at 1% FPR on benign validation, recall per family on the test split (and worst family), evolve against it on 60 arena intents (10 generations, pop 150), real-data AUC if the dataset is cached. `--baselines` adds the three built-in defenders as reference rows.
+- `run_bench`: calibrate at 1% FPR on benign validation, recall per family on the test split (and worst family), evolve against it on 60 arena intents (10 generations, pop 150), real-data AUC if the dataset is cached. `--baselines` adds the three built-in defenders as reference rows. Progress (calibrating, per-generation attacker success, real data) goes to stderr; the table to stdout.
 
 ![bench output](img/cli-bench.png)
 
@@ -574,7 +574,7 @@ The included `examples/keyword_detector.py` (ten regexes) gets 8% mean recall, 0
 
 | route | method | purpose |
 |---|---|---|
-| `/` | GET | the page; `?q=<prompt>` scans immediately, `?goal=…&defender=…` runs the attacker |
+| `/` | GET | the page; `?q=<prompt>` scans immediately, `?goal=…&defender=…` runs the attacker. The page rewrites its own URL after a scan or attack, so the address bar is always a shareable link |
 | `/api/health` | GET | `{ok, defenders, report, busy, limits}` |
 | `/api/scan` | POST | `{"text": …}` or `{"texts": […]}` (1–20 strings, ≤ 5,000 chars each) → rows with canonical view, flags, decoded payloads, `display`, verdicts |
 | `/api/attack` | POST | `{"goal", "defender", "generations", "pop"}` → full attack result (blocking) |
@@ -635,7 +635,7 @@ Everything is configurable with environment variables (`GAUNTLET_MAX_POP`, `GAUN
 ### Dockerfile
 
 ```
-python:3.12-slim → pip install requirements.txt → copy gauntlet/ and reports/report.html
+python:3.12-slim → pip install requirements.txt (runtime only, no pytest/ruff) → copy gauntlet/ and reports/report.html
 → RUN python -m gauntlet warm   (train + cache the three defenders into the image)
 → non-root user `app` → EXPOSE 7860 → HEALTHCHECK on /api/health
 → CMD python -m gauntlet serve --host 0.0.0.0 --port $PORT
@@ -653,7 +653,7 @@ Hugging Face Space (free CPU tier, one-time `huggingface-cli` push), Fly.io, Ren
 | job | what |
 |---|---|
 | `lint` | `ruff check gauntlet tests examples` (rules E, F, W, B, UP; config in `pyproject.toml`) |
-| `test` × {3.10, 3.11, 3.13, 3.14} | `pip install -r requirements.txt`, `pytest -q`, then `python -m gauntlet run --quick` end to end |
+| `test` × {3.10, 3.11, 3.13, 3.14} | `pip install -r requirements-dev.txt`, `pytest -q`, then `python -m gauntlet run --quick` end to end |
 | `docker` | build the image, start it, poll `/api/health`, assert a scan returns `"flagged": true`, assert the attack stream ends with `event: done` |
 
 Torch-dependent test modules skip themselves when torch is absent, so CI exercises everything except the transformer code paths.
@@ -662,17 +662,17 @@ Torch-dependent test modules skip themselves when torch is absent, so CI exercis
 
 ## 18. Testing strategy
 
-75 tests (65 without torch). Principle: test *properties* that must hold, not implementation details.
+77 tests (67 without torch). Principle: test *properties* that must hold, not implementation details.
 
 | file | what it protects |
 |---|---|
 | `test_canonical.py` (10) | invisibles stripped, homoglyphs folded, fullwidth normalised, de-leet/de-space, base64/hex/ROT13 decoded, plain numbers untouched, flags quiet on clean text, oracle accepts recoverable and rejects destroyed text, tag-smuggle and bidi decode paths, their composition with other tricks over 50 random draws, `visible()` markers |
 | `test_corpus.py` (6) | intent splits disjoint across train/test/arena, > 99% of attacks understood by the victim, label/split consistency, dataset determinism, every family produces distinct non-empty text, intents unique |
-| `test_defender.py` (6) | scores are probabilities, calibration holds the FPR on its own data for all three kinds, plain attack detected and plain question not, windows contain the whole text and sentences, unknown kind rejected |
+| `test_defender.py` (7) | scores are probabilities, calibration holds the FPR on its own data for all three kinds, plain attack detected and plain question not, `explain` returns the firing window only for the windowed kind, windows contain the whole text and sentences, unknown kind rejected |
 | `test_evolve.py` (3) | 300 mutants all keep the intent recoverable and carry lineage, evolution output shapes and validity (every evasion both victim-valid and below threshold), determinism |
 | `test_attack.py` (3) | deterministic result, examples below threshold with lineage, tiny goal rejected, render mentions goal and curve |
-| `test_bench.py` (8) | output validation (wrong length, NaN, non-numeric, per-text, empty), calibration hits the target FPR on random scores, loading from file/module and every error path, HTTP detector preserves order and rejects bad JSON (in-process servers), full `run_bench` on a weak detector is beaten, CLI end to end with `--json`, CLI user errors |
-| `test_scan.py` (3) | canonical view/flags/decoded/verdicts, render shows BLOCK and the decoded payload line, CLI needs input |
+| `test_bench.py` (8) | output validation (wrong length, NaN, non-numeric, per-text, empty), calibration hits the target FPR on random scores, loading from file/module and every error path, HTTP detector preserves order and rejects bad JSON (in-process servers), full `run_bench` on a weak detector is beaten and emits progress lines, CLI end to end with `--json`, CLI user errors |
+| `test_scan.py` (4) | canonical view/flags/decoded/verdicts, the windowed verdict names the window that fired (and only when something fired), render shows BLOCK, the decoded payload and the fired-on line, CLI needs input |
 | `test_serve.py` (18) | page + security headers + health, `/report` 200/404, scan endpoint shape, 7 malformed inputs → 400, attack endpoint and limits, SSE stream event sequence (`start`, 4 × `progress`, `done`) and 400 before streaming on bad goal, malformed JSON is 400 not a crash, rate limits per client and `X-Forwarded-For` separation, 429 on the second attack, `RateLimiter`/`AttackSlot` unit behaviour including timeout and hand-off, `Config.from_env` including clear failures on malformed env values, unexpected exception → JSON 500 and the server stays up |
 | `test_cache.py` (4) | round trip with identical scores and threshold, fingerprint in the filename, `clear`, corrupt entry ignored, disabled by env, `train_defenders` uses the cache but never for custom data |
 | `test_multilingual.py` (4) | German heuristic, language mix changes, attacks unaffected by `multilingual_frac`, clear error when the real data is unavailable |
@@ -849,7 +849,7 @@ A: As a pre-deployment evaluation harness for whatever detector a team is consid
 | scale (unseen indirect) | L6/160: 3% · L6/640: 50% · L12/160: 51% · L12/640: 58% |
 | oracle agreement (keyword vs NLI) | 58% plain attacks, 52% evasions |
 | keyword detector example | 8% mean recall, evaded 95→100%, AUC 0.56 |
-| tests | 75 (65 without torch); CI on 3.10/3.11/3.13/3.14 + docker |
+| tests | 77 (67 without torch); CI on 3.10/3.11/3.13/3.14 + docker |
 | startup | serve cold 10 s, cached 1.8 s; container healthy in 7 s |
 | public limits | 30 scans/min, 4 attacks/10 min, ≤ 80 pop × 8 gens, queue 3 |
 | code size | ~2,750 lines in `gauntlet/`, ~700 lines of tests |

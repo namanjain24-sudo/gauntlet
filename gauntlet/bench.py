@@ -103,10 +103,17 @@ def load_callable(spec: str):
 
 
 def run_bench(defender, df: pd.DataFrame | None = None, seed: int = 0, generations: int = 10,
-              pop_size: int = 150, n_intents: int = 60, external_cache: Path | None = DEFAULT_CACHE) -> dict:
+              pop_size: int = 150, n_intents: int = 60, external_cache: Path | None = DEFAULT_CACHE, log=None) -> dict:
+    """Calibrate ``defender`` at 1% FPR, then measure family recall, attacker success and real-data AUC.
+
+    ``log`` (e.g. ``print`` to stderr) receives progress lines; None stays silent.
+    """
+    say = log or (lambda *_: None)
     df = build_dataset(seed) if df is None else df
+    say(f"[{defender.kind}] calibrating to {defender.fpr:.0%} false positives on benign validation prompts ...")
     defender.calibrate(df[(df.split == "val") & (df.label == 0)].text)
     test = df[df.split == "test"]
+    say(f"[{defender.kind}] recall per attack family on {int(test.label.sum())} test attacks ...")
     recall = {fam: float(defender.detect(test[test.family == fam].text).mean())
               for fam in sorted(df[df.label == 1].family.unique())}
     worst = min(recall, key=recall.get)
@@ -114,12 +121,15 @@ def run_bench(defender, df: pd.DataFrame | None = None, seed: int = 0, generatio
     rng = random.Random(seed)
     intents = sorted(df[df.split == "arena"].intent.unique())
     rng.shuffle(intents)
-    ev = evolve(defender, _seeds(df, intents[:n_intents]), rng, generations=generations, pop_size=pop_size)
+    say(f"[{defender.kind}] evolving attacks: {generations} generations x {pop_size} ...")
+    ev = evolve(defender, _seeds(df, intents[:n_intents]), rng, generations=generations, pop_size=pop_size,
+                on_generation=lambda g, asr: say(f"[{defender.kind}]   generation {g}: attacker success {asr:.0%}"))
     evolved = sorted((e for e in ev.evasions if e.lineage), key=lambda e: len(e.lineage))
     examples = [{"text": " ".join(e.text.split())[:240], "lineage": list(e.lineage)} for e in evolved[-3:]]
 
     ext = None
     if external_cache is not None:
+        say(f"[{defender.kind}] real human-written injections (deepset/prompt-injections) ...")
         data = external.fetch(external_cache)
         if data is not None:
             ext = external.evaluate(defender, data)

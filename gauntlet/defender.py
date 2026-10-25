@@ -74,6 +74,19 @@ class Defender:
         np.maximum.at(out, np.asarray(owner), probs)
         return out
 
+    def explain(self, text: str) -> dict | None:
+        """For the windowed defender: the window that produced the text's score (where the injection sits).
+
+        Returns ``{"window": str, "score": float}`` or None for non-windowed kinds. Scores are unchanged.
+        """
+        if self.kind != "windowed":
+            return None
+        ws = windows(canonicalize(text))
+        flags = "".join(f" xflag{f}" for f in transform_flags(text))
+        probs = self.model.predict_proba([w + flags for w in ws])[:, 1]
+        k = int(np.argmax(probs))
+        return {"window": ws[k], "score": float(probs[k])}
+
     def calibrate(self, benign_val) -> Defender:
         scores = self.score(benign_val)
         self.threshold = float(np.quantile(scores, 1.0 - self.fpr))

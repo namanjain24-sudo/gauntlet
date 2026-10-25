@@ -2,11 +2,11 @@ PY ?= .venv/bin/python
 
 .PHONY: setup setup-transformer test lint warm docker quick full transformers report scan attack serve bench scale multilingual judge
 
-setup:                ## create venv + install the light (CPU, scikit-learn) dependencies
-	python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt
+setup:                ## create venv + install the light (CPU, scikit-learn) dependencies + pytest/ruff
+	python3 -m venv .venv && .venv/bin/pip install -q -r requirements-dev.txt
 
 setup-transformer:    ## also install torch + transformers for the fine-tuned defenders
-	python3 -m venv .venv && .venv/bin/pip install -q -r requirements-transformer.txt
+	python3 -m venv .venv && .venv/bin/pip install -q -r requirements-dev.txt -r requirements-transformer.txt
 
 test:
 	$(PY) -m pytest -q

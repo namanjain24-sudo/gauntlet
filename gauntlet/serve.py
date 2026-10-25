@@ -399,6 +399,7 @@ function verdictCard(kind, v) {
   const bar = el("div", "bar"), fill = el("i"), tick = el("u");
   fill.style.width = Math.max(1, v.score * 100) + "%"; fill.style.background = "var(" + (v.flagged ? "--block" : "--allow") + ")"; tick.style.left = (Math.min(v.threshold, 1) * 100) + "%";
   bar.append(fill, tick); card.append(top, bar, el("div", "meta", "threshold " + v.threshold.toFixed(3)));
+  if (v.window) { const w = el("div", "meta"); w.append("fired on: ", el("span", "mono", "\u201c" + v.window + "\u201d")); card.append(w); }
   return card;
 }
 function renderRow(out, row, showPrompt) {
@@ -415,6 +416,7 @@ async function doScan(text) {
   $("scanBtn").disabled = true;
   try {
     const rows = (await api("/api/scan", {texts})).rows;
+    if (texts.length === 1) history.replaceState(null, "", "?q=" + encodeURIComponent(texts[0]));   // shareable link
     rows.forEach(row => renderRow(out, row, rows.length > 1));
   } catch (e) { out.append(el("div", "err", "Error: " + e.message)); }
   $("scanBtn").disabled = false;
@@ -445,6 +447,7 @@ function doAttack() {
   const out = $("atkOut"), msg = $("atkMsg"); out.replaceChildren(); msg.textContent = "Starting…";
   $("atkBtn").disabled = true; if (es) es.close();
   const q = new URLSearchParams({goal: $("goal").value, defender: $("who").value, generations: GENS, pop: POP}), curve = [];
+  history.replaceState(null, "", "?" + new URLSearchParams({goal: $("goal").value, defender: $("who").value}));   // shareable link
   const live = el("div"); out.append(live);
   const finish = () => { if (es) es.close(); es = null; $("atkBtn").disabled = false; };
   const fail = m => { msg.textContent = ""; out.append(el("div", "err", "Error: " + m)); finish(); };

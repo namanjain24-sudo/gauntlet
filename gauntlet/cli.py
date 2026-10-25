@@ -112,10 +112,11 @@ def main(argv: list[str] | None = None) -> None:
                 target, func = args.defender.rsplit(":", 1)
                 mine = bench.CallableDefender(fn, args.name or Path(target).stem or func, per_text=args.per_text)
             results = []
+            log = lambda m: print(m, file=sys.stderr, flush=True)  # noqa: E731 - progress goes to stderr, table to stdout
             if args.baselines:
-                for d in scan.train_defenders(seed=args.seed).values():
-                    results.append(bench.run_bench(d, seed=args.seed, generations=args.generations, pop_size=args.pop))
-            results.append(bench.run_bench(mine, seed=args.seed, generations=args.generations, pop_size=args.pop))
+                for d in scan.train_defenders(seed=args.seed, log=log).values():
+                    results.append(bench.run_bench(d, seed=args.seed, generations=args.generations, pop_size=args.pop, log=log))
+            results.append(bench.run_bench(mine, seed=args.seed, generations=args.generations, pop_size=args.pop, log=log))
         except (ValueError, OSError) as exc:
             ap.error(str(exc))
         print(bench.render(results))
