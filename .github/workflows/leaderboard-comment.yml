@@ -1,0 +1,47 @@
+# Post a submission's results back to its pull request.
+#
+# This is split out from leaderboard-pr.yml on purpose. That job runs the submitted
+# detector -- third-party code -- so it gets a read-only token and cannot comment.
+# This job never runs submitted code; it only reads the markdown that job produced,
+# which is why it is allowed a write token.
+name: leaderboard (comment)
+
+on:
+  workflow_run:
+    workflows: ["leaderboard (pull request)"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  actions: read
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        id: artifact
+        continue-on-error: true
+        with:
+          name: leaderboard-results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: out
+
+      - name: Post the results to the pull request
+        if: steps.artifact.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          [ -s out/pr.txt ] || { echo "no PR number in the artifact"; exit 0; }
+          PR=$(tr -dc '0-9' < out/pr.txt)
+          [ -n "$PR" ] || { echo "no PR number in the artifact"; exit 0; }
+          if [ ! -s out/comment.md ]; then
+            printf '## Gauntlet results\n\nThe arena did not finish for this submission. [See the run](%s) for what went wrong.\n\n<sub>gauntlet-leaderboard-comment</sub>\n' \
+              "${{ github.event.workflow_run.html_url }}" > out/comment.md
+          fi
+          # Replace this bot's previous comment rather than stacking a new one on every push.
+          gh pr comment "$PR" --body-file out/comment.md --edit-last \
+            || gh pr comment "$PR" --body-file out/comment.md

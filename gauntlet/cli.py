@@ -72,6 +72,8 @@ def main(argv: list[str] | None = None) -> None:
     lb.add_argument("--render", action="store_true", help="rebuild LEADERBOARD.md from the result files")
     lb.add_argument("--dir", type=Path, default=leaderboard.SUBMISSIONS, help="submissions directory")
     lb.add_argument("--out", type=Path, default=leaderboard.BOARD, help="leaderboard file to write")
+    lb.add_argument("--comment", type=Path, metavar="FILE",
+                    help="also write a pull-request comment for the submissions measured in this run")
     rep = sub.add_parser("report", help="re-render report.html from an existing results.json")
     rep.add_argument("--out", type=Path, default=Path("reports"))
     args = ap.parse_args(argv)
@@ -172,6 +174,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "leaderboard":
         log = lambda m: print(m, file=sys.stderr, flush=True)  # noqa: E731 - progress to stderr, board to stdout
         failed: list[str] = []
+        measured: list[dict] = []
         specs = sorted(args.dir.glob("*.json"))
         specs = [p for p in specs if not p.name.endswith(".result.json")]
         try:
@@ -190,6 +193,7 @@ def main(argv: list[str] | None = None) -> None:
                     log(f"FAILED {p}: {type(exc).__name__}: {exc}")
                     continue
                 leaderboard.result_path(p).write_text(json.dumps(record, indent=1, default=float) + "\n")
+                measured.append(record)
                 log(f"wrote {leaderboard.result_path(p)}  (score {leaderboard.score(record['result']):.1f})")
             if args.baselines:
                 for record in leaderboard.run_baselines(log=log):
@@ -201,6 +205,9 @@ def main(argv: list[str] | None = None) -> None:
         if args.render or args.run is not None or args.baselines:
             args.out.write_text(leaderboard.render(leaderboard.load_results(args.dir)))
             print(f"wrote {args.out}")
+        if args.comment and measured:
+            args.comment.write_text(leaderboard.render_comment(measured))
+            print(f"wrote {args.comment}")
         if failed:                                           # board still written, exit code still red
             ap.error(f"{len(failed)} submission(s) failed:\n  " + "\n  ".join(failed))
         return

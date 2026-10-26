@@ -58,20 +58,26 @@ go on the board — CI runs with no secrets, by design.
 
 ### 3. Open the PR
 
-Push the JSON (plus your detector file, if you are adding one) and open a pull request. CI picks
-it up, installs your requirements, runs the full arena, and posts your numbers to the run summary
-within a few minutes. When it merges, a second job measures it on `main` and commits the result
-and the regenerated board — **no number on the leaderboard is ever typed by a human.**
+Push the JSON (plus your detector file, if you are adding one) and open a pull request. CI picks it
+up, installs your requirements, runs the full arena, and **comments your results straight onto the
+PR**: the board row, recall on each of the 8 attack families, and the actual attacks that got
+through with the mutation chain that produced them. Push again and the comment is replaced, not
+stacked. When it merges, a second job measures it on `main` and commits the result and the
+regenerated board — **no number on the leaderboard is ever typed by a human.**
 
 A few things worth knowing before you are surprised by them:
 
 - Every entry runs at one pinned config (seed 0, 10 attacker generations × 150 population, 1% FPR).
   It lives in `gauntlet/leaderboard.py:CONFIG`; changing it re-measures the whole board.
+- Each result also records the Python, scikit-learn and numpy it was measured on. Your detector is
+  a fixed artifact and reproduces to the decimal anywhere; the reference defenders are retrained
+  from scikit-learn each run, so their rows move with the library stack. The board says so.
 - The built-in defenders sit in a **separate table** because they were trained on these attack
   families. Their recall is in-distribution and flattering. Do not read them as rivals.
 - Submissions are third-party code, so the PR job gets a read-only token and no secrets, and a
   first-time contributor's run needs a maintainer to click approve. That is GitHub's default and
-  this repo keeps it.
+  this repo keeps it. The comment is posted by a second job that only reads that one's output and
+  never runs your detector, which is why it is the only one with a write token.
 - The arena puts roughly 3,500 texts through your detector. A regex finishes in seconds; a
   184M-parameter encoder on a two-core runner takes most of an hour. The job allows two, but if
   your detector is slower than that, say so in the PR and we will measure it elsewhere.

@@ -52,7 +52,10 @@ jobs:
 
       - name: Run the arena
         if: steps.changed.outputs.count != '0'
-        run: xargs python -m gauntlet leaderboard --run < changed.txt
+        run: |
+          mkdir -p out
+          echo "${{ github.event.pull_request.number }}" > out/pr.txt
+          xargs python -m gauntlet leaderboard --run --comment out/comment.md < changed.txt
 
       - name: Post the numbers to the run summary
         if: always() && steps.changed.outputs.count != '0'
@@ -67,8 +70,13 @@ jobs:
             sed -n '/## Submitted detectors/,/^## Reference defenders/p' LEADERBOARD.md | sed '$d'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Read back by leaderboard-comment.yml, which has the write token this job must not.
       - uses: actions/upload-artifact@v4
-        if: steps.changed.outputs.count != '0'
+        if: always() && steps.changed.outputs.count != '0'
         with:
           name: leaderboard-results
-          path: submissions/*.result.json
+          path: |
+            out/pr.txt
+            out/comment.md
+            submissions/*.result.json
+          if-no-files-found: ignore
