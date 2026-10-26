@@ -32,6 +32,19 @@ What this says:
 
 Caveats that matter: one small transformer with a fixed 160-step CPU budget per fit; 3 seeds; the real-data set (662 prompts) is English + German while training data is English only. A bigger model or longer schedule may behave differently. See [Limitations](#limitations).
 
+## Who this is for
+
+Gauntlet is a **measurement instrument**, not a filter. Put a prompt-injection detector into it and find out how it fails before an attacker does.
+
+| you are… | run | you get |
+|---|---|---|
+| **shipping an LLM app** and choosing or building an input filter | `python -m gauntlet bench --defender your_model.py:score` (or `--url`) | recall on each of 8 attack styles at a fixed 1% false-positive rate, the style it misses most (usually injections hidden inside documents), how fast an adaptive attacker evades it, and its ranking quality on real human-written injections. Decide on evidence instead of a vendor's "99% accuracy" |
+| **red-teaming** a deployed filter | `python -m gauntlet attack "your goal" --defender …` | the mutation chains that get through (leetspeak, base64, benign padding, hidden Unicode), ready to replay against your own system |
+| **researching** detector robustness | `make full`, then read `reports/report.html` | three controlled experiments with seeds and confidence ranges: unseen-family recall, an attacker/defender arms race, and a sim-to-real check. The reusable finding so far: canonicalisation + windowing beat a bigger model |
+| **teaching or demoing** prompt injection | `python -m gauntlet serve` (or the Docker image) | a playground where anyone pastes a prompt, sees which defender blocks it and *where* the injection sits, and watches an attacker evolve evasions live |
+
+What it is **not**: a production-ready detector. The training data is synthetic and the built-in defenders are deliberately small; their job is to be measured, and to be a yardstick for the detector you bring.
+
 ## Quick start
 
 ```bash
