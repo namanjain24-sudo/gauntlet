@@ -72,6 +72,9 @@ A few things worth knowing before you are surprised by them:
 - Submissions are third-party code, so the PR job gets a read-only token and no secrets, and a
   first-time contributor's run needs a maintainer to click approve. That is GitHub's default and
   this repo keeps it.
+- The arena puts roughly 3,500 texts through your detector. A regex finishes in seconds; a
+  184M-parameter encoder on a two-core runner takes most of an hour. The job allows two, but if
+  your detector is slower than that, say so in the PR and we will measure it elsewhere.
 - A low score is a perfectly good contribution. The keyword-list entry scores 6.4 and it is on the
   board on purpose — a board where everything wins measures nothing.
 
