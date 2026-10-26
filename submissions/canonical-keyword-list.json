@@ -1,0 +1,7 @@
+{
+ "name": "canonical-keyword-list",
+ "author": "namanjain24-sudo",
+ "url": "https://github.com/namanjain24-sudo/gauntlet/blob/main/examples/canonical_keyword_detector.py",
+ "detector": "examples/canonical_keyword_detector.py:score",
+ "notes": "ablation of keyword-list: identical regexes over the canonical view. Isolates what canonicalisation alone is worth"
+}
