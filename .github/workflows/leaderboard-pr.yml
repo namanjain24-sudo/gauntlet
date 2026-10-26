@@ -55,7 +55,7 @@ jobs:
         run: |
           mkdir -p out
           echo "${{ github.event.pull_request.number }}" > out/pr.txt
-          xargs python -m gauntlet leaderboard --run --comment out/comment.md < changed.txt
+          python -m gauntlet leaderboard --run-from changed.txt --comment out/comment.md
 
       - name: Post the numbers to the run summary
         if: always() && steps.changed.outputs.count != '0'
