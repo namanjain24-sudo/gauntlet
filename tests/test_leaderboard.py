@@ -209,3 +209,17 @@ def test_cli_writes_the_pr_comment_only_for_what_it_measured(tmp_path, monkeypat
               "--out", str(tmp_path / "BOARD.md"), "--comment", str(comment)])
     body = comment.read_text()
     assert "`my-detector`" in body and "`already`" not in body
+
+
+def test_environment_is_recorded_so_a_moving_reference_row_is_explainable():
+    env = leaderboard.environment()
+    assert set(env) == {"python", "numpy", "sklearn"} and all(env.values())
+
+
+def test_render_shows_the_stack_each_row_was_measured_on_and_survives_an_older_record():
+    new = _record("fresh", 0.5, 0.5, 0.7)
+    new["env"] = {"python": "3.12.0", "numpy": "2.0.0", "sklearn": "1.5.0"}
+    old = _record("legacy", 0.4, 0.6, 0.6)          # written before env was recorded
+    md = leaderboard.render([new, old])
+    assert "| fresh | 2026-01-01 | 3.12.0 | 1.5.0 | 2.0.0 |" in md
+    assert "| legacy | 2026-01-01 | ? | ? | ? |" in md, "an older result must still render"

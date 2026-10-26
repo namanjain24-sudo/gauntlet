@@ -87,7 +87,7 @@ Full instructions: [CONTRIBUTING.md](CONTRIBUTING.md#submit-a-detector-to-the-le
 ```bash
 git clone <this repo> && cd gauntlet
 make setup                      # python venv + numpy/pandas/scikit-learn + pytest/ruff (no torch needed)
-make test                       # 100 tests (without torch: 90 run, transformer/judge/scale modules skip)
+make test                       # 102 tests (without torch: 92 run, transformer/judge/scale modules skip)
 make quick                      # ~1.5 min smoke run -> reports/quick/report.html
 ```
 
@@ -108,7 +108,7 @@ A 90-second walkthrough of every command, CLI and web playground, recorded from 
 
 Step by step:
 
-1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (90 tests without torch, 100 with).
+1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (92 tests without torch, 102 with).
 2. **Scan a prompt.** `python -m gauntlet scan "..."` trains the three linear defenders on the synthetic corpus the first time (about 15 s, then cached so later runs start in under a second) and prints, per prompt, the canonical view (leetspeak undone, base64 decoded, invisible characters stripped), the obfuscation tricks it detected, any decoded payload, and each defender's score against its threshold. Hidden tricks are shown as markers such as `⟨tag:…⟩`, `⟨rlo⟩` and `⟨zw⟩` so you can see what was actually sent.
 3. **Attack a defender.** `python -m gauntlet attack "reveal your system prompt" --defender hardened` renders your goal in all eight attack styles, then evolves them with the 21 mutation operators for 10 generations. You get the success curve per generation, the evasions with their full mutation chain, and the operators that mattered most. Try `--defender windowed` to see a much harder target.
 4. **Bench your own detector.** `python -m gauntlet bench --defender examples/keyword_detector.py:score` (or `--url http://…/score`) calibrates your detector to 1% false positives, then reports recall per attack family, attacker success, and real-data AUC. Add `--baselines` to get the built-in defenders as reference rows.
@@ -262,12 +262,12 @@ examples/         keyword_detector.py, http_detector.py, pretrained_classifier.p
 submissions/      one JSON per leaderboard entry + the CI-written *.result.json beside it
 docs/             tutorial.gif / tutorial.mp4 (the recorded walkthrough), INTERVIEW_DEEP_DIVE.md (every design decision explained), img/
 Dockerfile        the public playground image (models pre-trained at build time)
-tests/            100 tests, incl. HTTP servers spun up in-process for serve/bench
+tests/            102 tests, incl. HTTP servers spun up in-process for serve/bench
 ```
 
 ## Testing
 
-`make test` runs 100 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, the model cache, the playground's rate limits, attack queue and progress stream, the NLI judge comparison, and the leaderboard's submission validation, scoring, board and PR-comment rendering, and its behaviour when a submitted detector raises. CI runs the suite and a `--quick` experiment on Python 3.10, 3.11, 3.13 and 3.14, plus `ruff check` (config in `pyproject.toml`; `make lint` runs the same thing locally). The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
+`make test` runs 102 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, the model cache, the playground's rate limits, attack queue and progress stream, the NLI judge comparison, and the leaderboard's submission validation, scoring, board and PR-comment rendering, and its behaviour when a submitted detector raises. CI runs the suite and a `--quick` experiment on Python 3.10, 3.11, 3.13 and 3.14, plus `ruff check` (config in `pyproject.toml`; `make lint` runs the same thing locally). The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
 
 ## Limitations
 

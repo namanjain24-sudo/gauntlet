@@ -69,6 +69,9 @@ A few things worth knowing before you are surprised by them:
 
 - Every entry runs at one pinned config (seed 0, 10 attacker generations × 150 population, 1% FPR).
   It lives in `gauntlet/leaderboard.py:CONFIG`; changing it re-measures the whole board.
+- Each result also records the Python, scikit-learn and numpy it was measured on. Your detector is
+  a fixed artifact and reproduces to the decimal anywhere; the reference defenders are retrained
+  from scikit-learn each run, so their rows move with the library stack. The board says so.
 - The built-in defenders sit in a **separate table** because they were trained on these attack
   families. Their recall is in-distribution and flattering. Do not read them as rivals.
 - Submissions are third-party code, so the PR job gets a read-only token and no secrets, and a
