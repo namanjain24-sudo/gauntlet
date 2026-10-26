@@ -94,8 +94,8 @@ def run_baselines(log=None) -> list[dict]:
     """Benchmark the repo's own defenders at the same config, as reference rows."""
     from . import scan
     out = []
-    for kind, defender in scan.train_defenders(BASELINE_KINDS, seed=CONFIG["seed"], log=log).items():
-        defender.fpr = CONFIG["fpr"]
+    for kind, defender in scan.train_defenders(BASELINE_KINDS, seed=CONFIG["seed"],
+                                               fpr=CONFIG["fpr"], log=log).items():
         result = bench.run_bench(defender, seed=CONFIG["seed"], generations=CONFIG["generations"],
                                  pop_size=CONFIG["pop"], n_intents=CONFIG["n_intents"], log=log)
         out.append({

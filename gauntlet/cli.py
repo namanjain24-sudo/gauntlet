@@ -180,7 +180,8 @@ def main(argv: list[str] | None = None) -> None:
             log(f"{len(specs)} submission file(s) valid")
             if args.check:
                 return
-            todo = args.run if args.run else [p for p in specs if not leaderboard.result_path(p).exists()]
+            todo = [] if args.run is None else (args.run or
+                                                [p for p in specs if not leaderboard.result_path(p).exists()])
             for p in todo:
                 try:                                         # one broken detector must not block the board
                     record = leaderboard.run_spec(p, log=log)

@@ -154,3 +154,21 @@ def test_a_broken_detector_fails_loudly_without_blocking_the_rest_of_the_board(t
     assert "detector exploded" in err and "1 submission(s) failed" in err
     assert (tmp_path / "works.result.json").exists() and not (tmp_path / "boom.result.json").exists()
     assert "works" in out.read_text() and "boom" not in out.read_text()
+
+
+def test_baselines_and_run_are_independent_flags(tmp_path, monkeypatch, capsys):
+    """--baselines must not quietly start measuring submissions, and vice versa."""
+    calls = []
+
+    def fake_run(path, log=None):
+        calls.append(path)
+        return _record(path.stem, 0.5, 0.5, 0.7)
+
+    monkeypatch.setattr(leaderboard, "run_spec", fake_run)
+    monkeypatch.setattr(leaderboard, "run_baselines", lambda log=None: [])
+    write(tmp_path, GOOD)
+    out = tmp_path / "BOARD.md"
+    cli.main(["leaderboard", "--baselines", "--dir", str(tmp_path), "--out", str(out)])
+    assert calls == [], "--baselines alone benchmarked a submission"
+    cli.main(["leaderboard", "--run", "--dir", str(tmp_path), "--out", str(out)])
+    assert calls == [tmp_path / "my-detector.json"], "--run alone must measure what has no result yet"
