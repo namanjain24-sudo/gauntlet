@@ -4,13 +4,17 @@
 [![leaderboard](https://github.com/namanjain24-sudo/gauntlet/actions/workflows/leaderboard-main.yml/badge.svg)](LEADERBOARD.md)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![report](https://img.shields.io/badge/results-live%20report-d95926)](https://namanjain24-sudo.github.io/gauntlet/)
 
 **An adversarial arena that measures whether a prompt-injection defense survives attacks it has never seen, and lets you throw your own detector into it.**
 
 Most detectors report "99% accuracy" on a test set drawn from the distribution they trained on. The question a team actually has is different: *what happens when a new kind of attack shows up?* Gauntlet answers it with an evolutionary attacker, leave-one-family-out testing, and a check on real human-written injections. Everything runs on a laptop CPU, no API keys.
 
-![report preview](reports/preview.png)
+[![report preview](reports/preview.png)](https://namanjain24-sudo.github.io/gauntlet/)
 
+> **[📈 Live results report](https://namanjain24-sudo.github.io/gauntlet/)** — the full interactive write-up of the
+> three experiments, with per-seed ranges on every bar. Regenerated from `reports/report.html` on every push.
+>
 > **[📊 Leaderboard](LEADERBOARD.md)** — how every detector anyone has pointed at Gauntlet holds up on attacks it was
 > never trained on. Adding yours is one JSON file and a PR; CI runs it and posts the numbers.
 > [How to submit →](CONTRIBUTING.md#submit-a-detector-to-the-leaderboard)
@@ -47,7 +51,7 @@ Gauntlet is a **measurement instrument**, not a filter. Put a prompt-injection d
 |---|---|---|
 | **shipping an LLM app** and choosing or building an input filter | `python -m gauntlet bench --defender your_model.py:score` (or `--url`) | recall on each of 8 attack styles at a fixed 1% false-positive rate, the style it misses most (usually injections hidden inside documents), how fast an adaptive attacker evades it, and its ranking quality on real human-written injections. Decide on evidence instead of a vendor's "99% accuracy" |
 | **red-teaming** a deployed filter | `python -m gauntlet attack "your goal" --defender …` | the mutation chains that get through (leetspeak, base64, benign padding, hidden Unicode), ready to replay against your own system |
-| **researching** detector robustness | `make full`, then read `reports/report.html` | three controlled experiments with seeds and confidence ranges: unseen-family recall, an attacker/defender arms race, and a sim-to-real check. The reusable finding so far: canonicalisation + windowing beat a bigger model |
+| **researching** detector robustness | `make full`, then read [`reports/report.html`](https://namanjain24-sudo.github.io/gauntlet/) | three controlled experiments with seeds and confidence ranges: unseen-family recall, an attacker/defender arms race, and a sim-to-real check. The reusable finding so far: canonicalisation + windowing beat a bigger model |
 | **teaching or demoing** prompt injection | `python -m gauntlet serve` (or the Docker image) | a playground where anyone pastes a prompt, sees which defender blocks it and *where* the injection sits, and watches an attacker evolve evasions live |
 
 What it is **not**: a production-ready detector. The training data is synthetic and the built-in defenders are deliberately small; their job is to be measured, and to be a yardstick for the detector you bring.
