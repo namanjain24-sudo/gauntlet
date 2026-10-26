@@ -72,6 +72,9 @@ def main(argv: list[str] | None = None) -> None:
     lb.add_argument("--render", action="store_true", help="rebuild LEADERBOARD.md from the result files")
     lb.add_argument("--dir", type=Path, default=leaderboard.SUBMISSIONS, help="submissions directory")
     lb.add_argument("--out", type=Path, default=leaderboard.BOARD, help="leaderboard file to write")
+    lb.add_argument("--run-from", type=Path, metavar="FILE",
+                    help="benchmark the submission files listed one per line in FILE (what CI uses, so a list of "
+                         "paths never has to be appended after another flag's value)")
     lb.add_argument("--comment", type=Path, metavar="FILE",
                     help="also write a pull-request comment for the submissions measured in this run")
     rep = sub.add_parser("report", help="re-render report.html from an existing results.json")
@@ -183,8 +186,12 @@ def main(argv: list[str] | None = None) -> None:
             log(f"{len(specs)} submission file(s) valid")
             if args.check:
                 return
-            todo = [] if args.run is None else (args.run or
-                                                [p for p in specs if not leaderboard.result_path(p).exists()])
+            if args.run_from is not None:
+                todo = [Path(ln.strip()) for ln in args.run_from.read_text().splitlines() if ln.strip()]
+            elif args.run is None:
+                todo = []
+            else:
+                todo = args.run or [p for p in specs if not leaderboard.result_path(p).exists()]
             for p in todo:
                 try:                                         # one broken detector must not block the board
                     record = leaderboard.run_spec(p, log=log)
@@ -202,7 +209,7 @@ def main(argv: list[str] | None = None) -> None:
                     log(f"wrote {out}  (score {leaderboard.score(record['result']):.1f})")
         except (leaderboard.SpecError, ValueError, OSError) as exc:
             ap.error(str(exc))
-        if args.render or args.run is not None or args.baselines:
+        if args.render or args.run is not None or args.run_from is not None or args.baselines:
             args.out.write_text(leaderboard.render(leaderboard.load_results(args.dir)))
             print(f"wrote {args.out}")
         if args.comment and measured:

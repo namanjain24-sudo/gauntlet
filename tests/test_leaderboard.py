@@ -223,3 +223,19 @@ def test_render_shows_the_stack_each_row_was_measured_on_and_survives_an_older_r
     md = leaderboard.render([new, old])
     assert "| fresh | 2026-01-01 | 3.12.0 | 1.5.0 | 2.0.0 |" in md
     assert "| legacy | 2026-01-01 | ? | ? | ? |" in md, "an older result must still render"
+
+
+def test_run_from_reads_a_path_list_so_ci_never_has_to_append_paths_after_a_flag(tmp_path, monkeypatch):
+    """A regression: `xargs ... --comment FILE --run < list` put the paths on --comment, not --run."""
+    monkeypatch.setattr(leaderboard, "run_spec",
+                        lambda p, log=None: _record(p.stem, 0.5, 0.5, 0.7) | {"spec": {"name": p.stem, "author": "a"}})
+    write(tmp_path, GOOD)
+    write(tmp_path, {**GOOD, "name": "other"}, "other.json")
+    listing = tmp_path / "changed.txt"
+    listing.write_text(f"{tmp_path / 'my-detector.json'}\n\n")   # blank lines are ignored
+    comment = tmp_path / "comment.md"
+    cli.main(["leaderboard", "--run-from", str(listing), "--comment", str(comment),
+              "--dir", str(tmp_path), "--out", str(tmp_path / "BOARD.md")])
+    body = comment.read_text()
+    assert "`my-detector`" in body and "`other`" not in body
+    assert (tmp_path / "BOARD.md").exists(), "--run-from alone must still rebuild the board"
