@@ -11,7 +11,8 @@ No submitter types a number into this file.
 
 | # | detector | score | mean recall | weakest family | attacker success | real-data AUC | measured |
 |---|---|---|---|---|---|---|---|
-| 1 | [keyword-list](https://github.com/namanjain24-sudo/gauntlet/blob/main/examples/keyword_detector.py)<br><sub>namanjain24-sudo — the floor: a hand-written keyword list, included so the format has a worked example</sub> | **6.4** | 8% | encoding 0% | 100% | 0.56 | 2026-10-26 |
+| 1 | [protectai-deberta-v3](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2)<br><sub>namanjain24-sudo — DeBERTa-v3-base (184M) fine-tuned for prompt injection by a third party; never saw Gauntlet's data</sub> | **39.8** | 41% | indirect 6% | 98% | 0.88 | 2026-10-26 |
+| 2 | [keyword-list](https://github.com/namanjain24-sudo/gauntlet/blob/main/examples/keyword_detector.py)<br><sub>namanjain24-sudo — the floor: a hand-written keyword list, included so the format has a worked example</sub> | **6.4** | 8% | encoding 0% | 100% | 0.56 | 2026-10-26 |
 
 ## Reference defenders
 
@@ -20,9 +21,9 @@ recall is in-distribution and systematically flattering: read them as a yardstic
 
 | detector | score | mean recall | weakest family | attacker success | real-data AUC | measured |
 |---|---|---|---|---|---|---|
-| [windowed](https://github.com/namanjain24-sudo/gauntlet/blob/main/gauntlet/defender.py)<br><sub>namanjain24-sudo — built-in reference defender, trained on these attack families</sub> | **76.5** | 100% | indirect 99% | 32% | 0.81 | 2026-10-26 |
-| [naive](https://github.com/namanjain24-sudo/gauntlet/blob/main/gauntlet/defender.py)<br><sub>namanjain24-sudo — built-in reference defender, trained on these attack families</sub> | **51.2** | 100% | authority 100% | 60% | 0.57 | 2026-10-26 |
-| [hardened](https://github.com/namanjain24-sudo/gauntlet/blob/main/gauntlet/defender.py)<br><sub>namanjain24-sudo — built-in reference defender, trained on these attack families</sub> | **49.9** | 100% | authority 100% | 85% | 0.67 | 2026-10-26 |
+| [windowed](https://github.com/namanjain24-sudo/gauntlet/blob/main/gauntlet/defender.py)<br><sub>namanjain24-sudo — built-in reference defender, trained on these attack families</sub> | **85.6** | 100% | indirect 99% | 5% | 0.81 | 2026-10-26 |
+| [hardened](https://github.com/namanjain24-sudo/gauntlet/blob/main/gauntlet/defender.py)<br><sub>namanjain24-sudo — built-in reference defender, trained on these attack families</sub> | **50.6** | 100% | authority 100% | 83% | 0.67 | 2026-10-26 |
+| [naive](https://github.com/namanjain24-sudo/gauntlet/blob/main/gauntlet/defender.py)<br><sub>namanjain24-sudo — built-in reference defender, trained on these attack families</sub> | **47.9** | 100% | authority 100% | 70% | 0.57 | 2026-10-26 |
 
 ## Reading the columns
 
