@@ -166,6 +166,8 @@ def findings(g, a, e, kinds) -> list[str]:
     return out
 
 
+REPO = "https://github.com/namanjain24-sudo/gauntlet"
+
 CSS = """
 :root{color-scheme:light;--bg:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);
 --s0:#2a78d6;--s1:#eb6834;--s2:#1baf7a;--s3:#eda100;--s4:#e87ba4}
@@ -179,6 +181,9 @@ main{max-width:860px;margin:0 auto;padding:40px 20px 80px}h1{font-size:2rem;marg
 .s0{fill:var(--s0);stroke:var(--s0)}.s1{fill:var(--s1);stroke:var(--s1)}.s2{fill:var(--s2);stroke:var(--s2)}.s3{fill:var(--s3);stroke:var(--s3)}.s4{fill:var(--s4);stroke:var(--s4)}
 path.s0,path.s1,path.s2,path.s3,path.s4,rect.s0,rect.s1,rect.s2,rect.s3,rect.s4{stroke:none}
 .ln{fill:none;stroke-width:2}.dot{stroke:var(--surface);stroke-width:2}.hollow{fill:var(--surface);stroke-width:2.5}.link{stroke:var(--axis);stroke-width:2}
+a{color:var(--s0);text-decoration:none;border-bottom:1px solid rgba(127,127,127,.35)}a:hover{border-bottom-color:currentColor}
+.home{margin:0 0 28px;font-size:13.5px;color:var(--muted)}.home a{margin-right:4px}.home span{margin:0 8px}
+footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:13.5px}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 10px;font-size:13px;color:var(--ink)}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .legend small{color:var(--ink2)}ul{padding-left:18px;margin:8px 0}li{margin:5px 0}details{margin-top:8px}summary{cursor:pointer;color:var(--ink2);font-size:13px}
 .tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--grid)}th{color:var(--ink2);font-weight:600}
@@ -222,6 +227,7 @@ def render(res: dict) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gauntlet report</title><style>{CSS}</style></head><body><main>
 <h1>Gauntlet</h1><p class="sub">Adversarial co-evolution arena for prompt-injection defenses · {cfg['seeds']} seeds · {cfg['rounds']} rounds × {cfg['generations']} generations · population {cfg['pop_size']}</p>
+<p class="home"><a href="{REPO}">source on GitHub</a><span>·</span><a href="{REPO}/blob/main/LEADERBOARD.md">leaderboard</a><span>·</span><a href="{REPO}/blob/main/CONTRIBUTING.md#submit-a-detector-to-the-leaderboard">put your own detector through this</a></p>
 <section class="card"><h2>What the numbers say</h2><ul>{fnd}</ul></section>
 <section class="card"><h2>1 · Can it catch an attack family it has never seen?</h2>
 <p>Leave-one-family-out: the defender is retrained without one family, then tested on it. Threshold calibrated to 1% false positives on benign validation prompts. Bars show the mean over seeds; hover for ranges.</p>
@@ -237,7 +243,9 @@ def render(res: dict) -> str:
 <li>The <b>victim oracle</b> is a keyword-recovery proxy, not a real LLM. It can accept mutants a real model would not follow (e.g. heavy interleaving) and reject some it would.</li>
 <li>Thresholds are calibrated on synthetic benign text. On real data the operating point does not transfer, which is why AUC is reported alongside recall/FPR.</li>
 <li>Three defenders are linear models over TF-IDF; two are one small fine-tuned transformer (MiniLM-L6, 160 optimiser steps per fit, CPU budget). A larger model or a longer schedule may behave differently, so read the transformer rows as "a small fine-tuned encoder does not close the gap", not as a statement about all transformers.</li>
-</ul></section></main></body></html>"""
+</ul></section>
+<footer>Every number above is reproducible with <code>make full</code> from <a href="{REPO}">the repository</a>, on a laptop CPU, with no API keys. Bring your own detector: <a href="{REPO}/blob/main/CONTRIBUTING.md#submit-a-detector-to-the-leaderboard">it takes one JSON file</a>.</footer>
+</main></body></html>"""
 
 
 def write(results_path: Path, out_path: Path) -> None:
