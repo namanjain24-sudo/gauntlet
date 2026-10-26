@@ -52,6 +52,16 @@ jobs:
       - name: Measure everything without a result, then rebuild the board
         run: python -m gauntlet leaderboard --run --baselines
 
+      - name: Keep the measurements even if the commit below fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leaderboard-results
+          path: |
+            LEADERBOARD.md
+            submissions/*.result.json
+          if-no-files-found: ignore
+
       - name: Commit the board
         run: |
           git config user.name  "github-actions[bot]"
@@ -59,4 +69,15 @@ jobs:
           git add LEADERBOARD.md submissions
           git diff --staged --quiet && { echo "board already current"; exit 0; }
           git commit -m "Leaderboard: measure new submissions"
-          git push
+          # Measuring a transformer-sized detector takes half an hour, so main has often moved
+          # on by the time we get here. Rebase onto it and try again.
+          for attempt in 1 2 3; do
+            git push && exit 0
+            echo "push rejected, main moved while we were measuring (attempt $attempt)"
+            git pull --rebase origin main || {
+              echo "::error::rebase conflict. Run 'make leaderboard' locally and commit the board by hand."
+              exit 1
+            }
+          done
+          echo "::error::could not push the board after 3 attempts"
+          exit 1
