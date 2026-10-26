@@ -1,0 +1,8 @@
+{
+ "name": "protectai-deberta-v3",
+ "author": "namanjain24-sudo",
+ "url": "https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2",
+ "detector": "examples/pretrained_classifier.py:score",
+ "pip": ["torch", "transformers", "sentencepiece", "protobuf"],
+ "notes": "DeBERTa-v3-base (184M) fine-tuned for prompt injection by a third party; never saw Gauntlet's data"
+}

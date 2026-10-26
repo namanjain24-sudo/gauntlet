@@ -1,12 +1,19 @@
 # Gauntlet
 
 [![ci](https://github.com/namanjain24-sudo/gauntlet/actions/workflows/ci.yml/badge.svg)](https://github.com/namanjain24-sudo/gauntlet/actions/workflows/ci.yml)
+[![leaderboard](https://github.com/namanjain24-sudo/gauntlet/actions/workflows/leaderboard-main.yml/badge.svg)](LEADERBOARD.md)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **An adversarial arena that measures whether a prompt-injection defense survives attacks it has never seen, and lets you throw your own detector into it.**
 
 Most detectors report "99% accuracy" on a test set drawn from the distribution they trained on. The question a team actually has is different: *what happens when a new kind of attack shows up?* Gauntlet answers it with an evolutionary attacker, leave-one-family-out testing, and a check on real human-written injections. Everything runs on a laptop CPU, no API keys.
 
 ![report preview](reports/preview.png)
+
+> **[📊 Leaderboard](LEADERBOARD.md)** — how every detector anyone has pointed at Gauntlet holds up on attacks it was
+> never trained on. Adding yours is one JSON file and a PR; CI runs it and posts the numbers.
+> [How to submit →](CONTRIBUTING.md#submit-a-detector-to-the-leaderboard)
 
 ## Headline result
 
@@ -45,12 +52,38 @@ Gauntlet is a **measurement instrument**, not a filter. Put a prompt-injection d
 
 What it is **not**: a production-ready detector. The training data is synthetic and the built-in defenders are deliberately small; their job is to be measured, and to be a yardstick for the detector you bring.
 
+## The leaderboard
+
+[`LEADERBOARD.md`](LEADERBOARD.md) is the running answer to "whose detector actually survives an attack it has
+never seen?" — for every detector anyone has sent through the arena.
+
+| | |
+|---|---|
+| **What gets on it** | anything that maps texts to a suspicion score: a regex, a fine-tuned model, a commercial API wrapper, three lines of heuristics |
+| **What you write** | one JSON file in `submissions/`, naming your detector and the pip packages it needs |
+| **Who produces the numbers** | CI does. A PR job runs your detector and posts your results; a merge job re-measures it on `main` and commits the board. No number on the board is ever typed by a human |
+| **The config** | identical for every entry: seed 0, 10 attacker generations × 150 population, thresholds calibrated to 1% false positives on benign prompts (`gauntlet/leaderboard.py:CONFIG`) |
+
+```bash
+python -m gauntlet bench --defender path/to/your_detector.py:score --baselines   # see your numbers first
+make leaderboard                                                                  # rebuild the board locally
+```
+
+Two things are deliberate and worth saying out loud. The repo's own defenders sit in a **separate table**,
+because they were trained on these attack families and their recall is in-distribution and flattering — read
+them as a yardstick, not as rivals. And the single `score` column is an equal-thirds mean of unseen-family
+recall, resistance to the evolutionary attacker, and real-data AUC: it exists to give the board a stable sort
+order, not to be a verdict. Those three disagree with each other constantly, and the disagreement is the most
+interesting thing on the page.
+
+Full instructions: [CONTRIBUTING.md](CONTRIBUTING.md#submit-a-detector-to-the-leaderboard).
+
 ## Quick start
 
 ```bash
 git clone <this repo> && cd gauntlet
 make setup                      # python venv + numpy/pandas/scikit-learn + pytest/ruff (no torch needed)
-make test                       # 77 tests (without torch: 67 run, transformer/judge/scale modules skip)
+make test                       # 96 tests (without torch: 86 run, transformer/judge/scale modules skip)
 make quick                      # ~1.5 min smoke run -> reports/quick/report.html
 ```
 
@@ -71,7 +104,7 @@ A 90-second walkthrough of every command, CLI and web playground, recorded from 
 
 Step by step:
 
-1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (67 tests without torch, 77 with).
+1. **Install.** `make setup` creates a venv with numpy / pandas / scikit-learn. `make test` runs the suite (86 tests without torch, 96 with).
 2. **Scan a prompt.** `python -m gauntlet scan "..."` trains the three linear defenders on the synthetic corpus the first time (about 15 s, then cached so later runs start in under a second) and prints, per prompt, the canonical view (leetspeak undone, base64 decoded, invisible characters stripped), the obfuscation tricks it detected, any decoded payload, and each defender's score against its threshold. Hidden tricks are shown as markers such as `⟨tag:…⟩`, `⟨rlo⟩` and `⟨zw⟩` so you can see what was actually sent.
 3. **Attack a defender.** `python -m gauntlet attack "reveal your system prompt" --defender hardened` renders your goal in all eight attack styles, then evolves them with the 21 mutation operators for 10 generations. You get the success curve per generation, the evasions with their full mutation chain, and the operators that mattered most. Try `--defender windowed` to see a much harder target.
 4. **Bench your own detector.** `python -m gauntlet bench --defender examples/keyword_detector.py:score` (or `--url http://…/score`) calibrates your detector to 1% false positives, then reports recall per attack family, attacker success, and real-data AUC. Add `--baselines` to get the built-in defenders as reference rows.
@@ -193,6 +226,7 @@ Every experiment talks to defenders through one small interface, which is why th
 | `python -m gauntlet warm [--clear]` | train and cache the linear defenders (or delete the cache) |
 | `python -m gauntlet judge-compare [--defender K]` | compare the keyword oracle against a small NLI model oracle |
 | `python -m gauntlet multilingual-check [--defender K] [--frac F]` | does non-English training data narrow the real-data AUC gap? |
+| `python -m gauntlet leaderboard [--check] [--run SPEC...] [--baselines] [--render]` | validate, measure and re-render the public [leaderboard](LEADERBOARD.md) |
 | `make lint` | ruff over `gauntlet/`, `tests/`, `examples/` (same check CI runs) |
 
 Defenders: `naive`, `hardened`, `windowed`, and (with `make setup-transformer`) `transformer`, `transformer_windowed`.
@@ -215,19 +249,21 @@ gauntlet/
   external.py     real-data check (downloads and caches deepset/prompt-injections)
   experiment.py   multi-seed runner + merge          report.py   self-contained HTML (inline SVG, dark mode)
   scan.py attack.py bench.py serve.py cli.py          the user-facing commands
+  leaderboard.py  submission validation, scoring and LEADERBOARD.md rendering
   cache.py        on-disk cache of trained linear defenders (instant scan/attack/serve start)
   scale.py        does a bigger/longer-trained transformer close the 'indirect' gap?
   judge.py        a second (NLI-model) victim oracle, and comparison to the keyword one
   multilingual.py does non-English training data narrow the real-data AUC gap?
 examples/         keyword_detector.py, http_detector.py, pretrained_classifier.py (starting points for `bench`)
+submissions/      one JSON per leaderboard entry + the CI-written *.result.json beside it
 docs/             tutorial.gif / tutorial.mp4 (the recorded walkthrough), INTERVIEW_DEEP_DIVE.md (every design decision explained), img/
 Dockerfile        the public playground image (models pre-trained at build time)
-tests/            77 tests, incl. HTTP servers spun up in-process for serve/bench
+tests/            96 tests, incl. HTTP servers spun up in-process for serve/bench
 ```
 
 ## Testing
 
-`make test` runs 77 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, the model cache, the playground's rate limits, attack queue and progress stream, and the NLI judge comparison. CI runs the suite and a `--quick` experiment on Python 3.10, 3.11, 3.13 and 3.14, plus `ruff check` (config in `pyproject.toml`; `make lint` runs the same thing locally). The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
+`make test` runs 96 tests: transform and canonicaliser round-trips (including the tag-smuggling/bidi-override decode paths and their composition with other tricks), dataset-split disjointness, calibration behaviour, evolutionary-attacker validity and determinism, the transformer defenders (learning, reproducibility, order-independence), the `scan`/`attack`/`serve`/`bench`/`multilingual-check` commands including bad input, malformed JSON and misbehaving HTTP detectors, the model cache, the playground's rate limits, attack queue and progress stream, the NLI judge comparison, and the leaderboard's submission validation, scoring, rendering and its behaviour when a submitted detector raises. CI runs the suite and a `--quick` experiment on Python 3.10, 3.11, 3.13 and 3.14, plus `ruff check` (config in `pyproject.toml`; `make lint` runs the same thing locally). The transformer/judge/scale test modules skip themselves as a whole when torch is not installed.
 
 ## Limitations
 
@@ -235,7 +271,7 @@ tests/            77 tests, incl. HTTP servers spun up in-process for serve/benc
 - The **victim oracle is a keyword-recovery proxy**, not a real LLM. It may accept mutants a real model would not follow (e.g. heavy interleaving) and reject some it would.
 - **Calibration does not transfer.** The 1% false-positive threshold set on validation prompts gives 1.8% on the synthetic test split for naive (0 to 0.2% for the others), and on real data the windowed models catch only ~18 to 35% of injections at their threshold despite the best AUC. Use AUC to compare, recall/FPR to see the operating-point problem.
 - The real-data set is English + German while training data is English only; part of the AUC gap may be language, not attack style.
-- The transformer is **ne small model (MiniLM-L6) with a short CPU-budget schedule**. The claim supported is "a small fine-tuned encoder does not close the gap", not "transformers can't". A larger model, more steps, or a model pretrained for injection detection is the obvious next test.
+- The transformer is **one small model (MiniLM-L6) with a short CPU-budget schedule**. The claim supported is "a small fine-tuned encoder does not close the gap", not "transformers can't". A larger model, more steps, or a model pretrained for injection detection is the obvious next test.
 - 3 seeds. Ranges across seeds are in the report's hover tooltips and data tables; differences of a point or two between defenders are within noise.
 - `serve` and `bench` are research instruments on a toy corpus, not a production filter or a certification.
 
@@ -292,3 +328,17 @@ Mixes German/French/Spanish benign text into training (`corpus.build_dataset(mul
 | windowed | +30% German/French/Spanish | 0.80 | **0.82** | 0.81 |
 
 Adding non-English training data did **not** close the German-subset gap for the linear `hardened` defender (0.62 → 0.62, flat) — it improved the *English*-subset AUC instead (0.67 → 0.72), more consistent with an added-diversity regularisation effect than a language-coverage effect. For `windowed` it went the other way: a small, seed-consistent gain specifically on the German subset (0.80 → 0.82). Neither defender's German-subset AUC comes close to the linear windowed defender's English-only AUC (0.80), so most of the real-data gap for `hardened` looks like it is about attack style, not language — but the effect of adding multilingual data is architecture-dependent, not a free win.
+
+## Contributing
+
+The arena is more interesting when it is harder to beat, and there are two ways to make it so:
+**[put a detector on the leaderboard](CONTRIBUTING.md#submit-a-detector-to-the-leaderboard)** (one JSON file), or
+**[add an attack family or mutation operator](CONTRIBUTING.md#contribute-to-the-arena-itself)** that the current
+8 families and 21 operators cannot express — the highest-value contribution here, because every defender's
+leave-one-family-out number gains a column and some of them will fail it.
+
+Full guide in [CONTRIBUTING.md](CONTRIBUTING.md); security policy in [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE).

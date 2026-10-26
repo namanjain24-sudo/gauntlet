@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import attack, bench, cache, experiment, multilingual, report, scan
+from . import attack, bench, cache, experiment, leaderboard, multilingual, report, scan
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -64,6 +64,14 @@ def main(argv: list[str] | None = None) -> None:
     wm.add_argument("--kinds", default=",".join(experiment.KINDS))
     wm.add_argument("--seed", type=int, default=0)
     wm.add_argument("--clear", action="store_true", help="delete the cache instead")
+    lb = sub.add_parser("leaderboard", help="validate, run and render the public detector leaderboard")
+    lb.add_argument("--check", action="store_true", help="validate submission files only, run nothing")
+    lb.add_argument("--run", nargs="*", type=Path, metavar="SPEC",
+                    help="benchmark these submission files (no paths = every one missing a result)")
+    lb.add_argument("--baselines", action="store_true", help="also re-measure the built-in reference defenders")
+    lb.add_argument("--render", action="store_true", help="rebuild LEADERBOARD.md from the result files")
+    lb.add_argument("--dir", type=Path, default=leaderboard.SUBMISSIONS, help="submissions directory")
+    lb.add_argument("--out", type=Path, default=leaderboard.BOARD, help="leaderboard file to write")
     rep = sub.add_parser("report", help="re-render report.html from an existing results.json")
     rep.add_argument("--out", type=Path, default=Path("reports"))
     args = ap.parse_args(argv)
@@ -160,6 +168,40 @@ def main(argv: list[str] | None = None) -> None:
             ap.error("cache disabled by GAUNTLET_CACHE=0")
         scan.train_defenders(kinds, seed=args.seed, log=print)
         print(f"cached {', '.join(kinds)} in {cache.cache_dir()}")
+        return
+    if args.cmd == "leaderboard":
+        log = lambda m: print(m, file=sys.stderr, flush=True)  # noqa: E731 - progress to stderr, board to stdout
+        failed: list[str] = []
+        specs = sorted(args.dir.glob("*.json"))
+        specs = [p for p in specs if not p.name.endswith(".result.json")]
+        try:
+            for p in specs:
+                leaderboard.load_spec(p)                     # every file is validated, always
+            log(f"{len(specs)} submission file(s) valid")
+            if args.check:
+                return
+            todo = args.run if args.run else [p for p in specs if not leaderboard.result_path(p).exists()]
+            for p in todo:
+                try:                                         # one broken detector must not block the board
+                    record = leaderboard.run_spec(p, log=log)
+                except Exception as exc:                     # noqa: BLE001 - submissions are third-party code
+                    failed.append(f"{p}: {type(exc).__name__}: {exc}")
+                    log(f"FAILED {p}: {type(exc).__name__}: {exc}")
+                    continue
+                leaderboard.result_path(p).write_text(json.dumps(record, indent=1, default=float) + "\n")
+                log(f"wrote {leaderboard.result_path(p)}  (score {leaderboard.score(record['result']):.1f})")
+            if args.baselines:
+                for record in leaderboard.run_baselines(log=log):
+                    out = args.dir / f"{record['spec']['name']}.result.json"
+                    out.write_text(json.dumps(record, indent=1, default=float) + "\n")
+                    log(f"wrote {out}  (score {leaderboard.score(record['result']):.1f})")
+        except (leaderboard.SpecError, ValueError, OSError) as exc:
+            ap.error(str(exc))
+        if args.render or args.run is not None or args.baselines:
+            args.out.write_text(leaderboard.render(leaderboard.load_results(args.dir)))
+            print(f"wrote {args.out}")
+        if failed:                                           # board still written, exit code still red
+            ap.error(f"{len(failed)} submission(s) failed:\n  " + "\n  ".join(failed))
         return
     if args.cmd == "run":
         if args.quick:

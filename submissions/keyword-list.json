@@ -1,0 +1,7 @@
+{
+ "name": "keyword-list",
+ "author": "namanjain24-sudo",
+ "url": "https://github.com/namanjain24-sudo/gauntlet/blob/main/examples/keyword_detector.py",
+ "detector": "examples/keyword_detector.py:score",
+ "notes": "the floor: a hand-written keyword list, included so the format has a worked example"
+}

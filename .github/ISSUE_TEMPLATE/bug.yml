@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work, or a number looks wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: What did you run?
+      description: The exact command, please — most bug reports here are reproducible from one line.
+      render: shell
+      placeholder: python -m gauntlet bench --defender examples/keyword_detector.py:score
+    validations: { required: true }
+  - type: textarea
+    id: output
+    attributes:
+      label: What happened?
+      description: Output or traceback. Trim it to the interesting part if it is long.
+      render: shell
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes:
+      label: Python version and OS
+      placeholder: "3.12 on Ubuntu 24.04"
+    validations: { required: true }
+  - type: checkboxes
+    id: torch
+    attributes:
+      label: Environment
+      options:
+        - label: torch + transformers are installed (`make setup-transformer`)

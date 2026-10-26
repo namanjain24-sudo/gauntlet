@@ -1,0 +1,74 @@
+# Someone opened a PR adding a detector: run it and show them their numbers.
+# Submitted detectors are third-party code, so this job gets a read-only token, no secrets,
+# and never writes to the repo. (A first-time contributor's run also needs a maintainer click.)
+name: leaderboard (pull request)
+
+on:
+  pull_request:
+    paths:
+      - 'submissions/**'
+      - '!submissions/*.result.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: leaderboard-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - run: pip install -r requirements.txt
+
+      - name: Validate every submission file
+        run: python -m gauntlet leaderboard --check
+
+      - name: Which submissions does this PR touch?
+        id: changed
+        run: |
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD -- 'submissions/*.json' \
+            | grep -v '\.result\.json$' > changed.txt || true
+          echo "count=$(wc -l < changed.txt)" >> "$GITHUB_OUTPUT"
+          echo "Changed submissions:"; cat changed.txt
+
+      - name: Install what the submissions ask for
+        if: steps.changed.outputs.count != '0'
+        run: |
+          python - <<'PY' > reqs.txt
+          import json, pathlib
+          for line in pathlib.Path("changed.txt").read_text().split():
+              print("\n".join(json.loads(pathlib.Path(line).read_text()).get("pip", [])))
+          PY
+          cat reqs.txt
+          [ -s reqs.txt ] && pip install -r reqs.txt || echo "nothing extra to install"
+
+      - name: Run the arena
+        if: steps.changed.outputs.count != '0'
+        run: xargs python -m gauntlet leaderboard --run < changed.txt
+
+      - name: Post the numbers to the run summary
+        if: always() && steps.changed.outputs.count != '0'
+        run: |
+          {
+            echo "## Gauntlet results for this PR"
+            echo
+            echo "Numbers produced by this run, at the pinned leaderboard config."
+            echo "They land on the board when a maintainer merges — nothing here is typed by hand."
+            echo
+            python -m gauntlet leaderboard --render >/dev/null
+            sed -n '/## Submitted detectors/,/^## Reference defenders/p' LEADERBOARD.md | sed '$d'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.changed.outputs.count != '0'
+        with:
+          name: leaderboard-results
+          path: submissions/*.result.json

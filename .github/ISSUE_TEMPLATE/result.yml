@@ -1,0 +1,27 @@
+name: A result you got
+description: You benched a detector and something surprising came out
+labels: [result]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you want the number on the board permanently, send a
+        [submission PR](https://github.com/namanjain24-sudo/gauntlet/blob/main/CONTRIBUTING.md#submit-a-detector-to-the-leaderboard)
+        instead — CI will reproduce it. This template is for a one-off finding worth discussing.
+  - type: input
+    id: detector
+    attributes:
+      label: What did you bench?
+      placeholder: "protectai/deberta-v3-base-prompt-injection-v2"
+    validations: { required: true }
+  - type: textarea
+    id: table
+    attributes:
+      label: The table gauntlet printed
+      render: text
+    validations: { required: true }
+  - type: textarea
+    id: surprise
+    attributes:
+      label: What surprised you?
+    validations: { required: true }

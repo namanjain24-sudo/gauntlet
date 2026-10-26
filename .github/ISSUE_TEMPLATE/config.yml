@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Put your detector on the leaderboard
+    url: https://github.com/namanjain24-sudo/gauntlet/blob/main/CONTRIBUTING.md#submit-a-detector-to-the-leaderboard
+    about: One JSON file and a PR. CI runs your detector through the arena and posts the numbers.
+  - name: Report a security vulnerability
+    url: https://github.com/namanjain24-sudo/gauntlet/security/advisories/new
+    about: Privately, not as a public issue.

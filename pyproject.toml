@@ -7,11 +7,27 @@ name = "gauntlet"
 version = "0.1.0"
 description = "Adversarial co-evolution arena that measures how prompt-injection defenses generalise to unseen attacks."
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+keywords = ["prompt-injection", "llm-security", "adversarial", "benchmark", "red-teaming"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = ["numpy", "pandas", "scikit-learn", "certifi"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 transformer = ["torch", "transformers"]
+
+[project.urls]
+Homepage = "https://github.com/namanjain24-sudo/gauntlet"
+Leaderboard = "https://github.com/namanjain24-sudo/gauntlet/blob/main/LEADERBOARD.md"
+Issues = "https://github.com/namanjain24-sudo/gauntlet/issues"
 
 [project.scripts]
 gauntlet = "gauntlet.cli:main"

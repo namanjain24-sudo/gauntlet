@@ -1,0 +1,36 @@
+name: New attack family or mutation operator
+description: An injection style Gauntlet cannot currently produce — the most valuable contribution to this repo
+labels: [attack, enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gauntlet has 8 attack families and 21 mutation operators. A style that fits in neither is
+        a genuine gap in the measurement, and it usually breaks at least one defender's
+        leave-one-family-out number — which is the whole point.
+  - type: textarea
+    id: example
+    attributes:
+      label: An example attack
+      description: A concrete prompt. Redact anything real.
+      render: text
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes:
+      label: Why can't the existing families produce this?
+      description: "Current families: direct, roleplay, authority, encoding, payload split, multilingual, indirect, obfuscation."
+    validations: { required: true }
+  - type: textarea
+    id: victim
+    attributes:
+      label: Can a victim model still act on it?
+      description: >
+        Gauntlet rejects mutants whose payload is destroyed, so an attack only counts if the
+        instruction survives. Say why you think a model would still follow this one.
+    validations: { required: true }
+  - type: input
+    id: source
+    attributes:
+      label: Source, if any
+      placeholder: paper, blog post, CTF writeup, or "found it myself"

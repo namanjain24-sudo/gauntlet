@@ -1,0 +1,62 @@
+# A submission landed on main: measure it and commit the result + regenerated board.
+# This runs reviewed, merged code, so it is allowed to write back.
+name: leaderboard (main)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'submissions/**'
+      - '!submissions/*.result.json'
+      - '!LEADERBOARD.md'
+  workflow_dispatch:
+    inputs:
+      rerun_all:
+        description: 'Re-measure every entry from scratch (use after changing the arena)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: leaderboard-main
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - run: pip install -r requirements.txt
+
+      - name: Install what the submissions ask for
+        run: |
+          python - <<'PY' > reqs.txt
+          import json, pathlib
+          for p in sorted(pathlib.Path("submissions").glob("*.json")):
+              if p.name.endswith(".result.json"):
+                  continue
+              print("\n".join(json.loads(p.read_text()).get("pip", [])))
+          PY
+          cat reqs.txt
+          [ -s reqs.txt ] && pip install -r reqs.txt || echo "nothing extra to install"
+
+      - name: Drop stale results
+        if: inputs.rerun_all
+        run: rm -f submissions/*.result.json
+
+      - name: Measure everything without a result, then rebuild the board
+        run: python -m gauntlet leaderboard --run --baselines
+
+      - name: Commit the board
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add LEADERBOARD.md submissions
+          git diff --staged --quiet && { echo "board already current"; exit 0; }
+          git commit -m "Leaderboard: measure new submissions"
+          git push

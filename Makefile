@@ -1,6 +1,6 @@
 PY ?= .venv/bin/python
 
-.PHONY: setup setup-transformer test lint warm docker quick full transformers report scan attack serve bench scale multilingual judge
+.PHONY: setup setup-transformer test lint warm docker quick full transformers report scan attack serve bench leaderboard scale multilingual judge
 
 setup:                ## create venv + install the light (CPU, scikit-learn) dependencies + pytest/ruff
 	python3 -m venv .venv && .venv/bin/pip install -q -r requirements-dev.txt
@@ -44,6 +44,9 @@ docker:               ## build and run the public playground container at http:/
 
 bench:                ## make bench F=examples/keyword_detector.py:score
 	$(PY) -m gauntlet bench --defender "$(F)" --baselines
+
+leaderboard:          ## measure every submission missing a result + the baselines, rebuild LEADERBOARD.md (~20 s)
+	$(PY) -m gauntlet leaderboard --run --baselines
 
 scale:                ## needs setup-transformer: does a bigger/longer-trained transformer close the 'indirect' gap? (~30-60 min)
 	$(PY) -c "from gauntlet import scale; print(scale.render(scale.run()))"
