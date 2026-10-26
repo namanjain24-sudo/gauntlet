@@ -70,13 +70,16 @@ jobs:
             sed -n '/## Submitted detectors/,/^## Reference defenders/p' LEADERBOARD.md | sed '$d'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Collect everything this run produced
+        if: always() && steps.changed.outputs.count != '0'
+        run: cp submissions/*.result.json out/ 2>/dev/null || true
+
       # Read back by leaderboard-comment.yml, which has the write token this job must not.
+      # One directory, so the artifact's layout cannot shift with which files happen to exist:
+      # upload-artifact roots a multi-path upload at the paths' common ancestor.
       - uses: actions/upload-artifact@v4
         if: always() && steps.changed.outputs.count != '0'
         with:
           name: leaderboard-results
-          path: |
-            out/pr.txt
-            out/comment.md
-            submissions/*.result.json
+          path: out
           if-no-files-found: ignore
