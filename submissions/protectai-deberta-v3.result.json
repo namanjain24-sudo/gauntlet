@@ -20,6 +20,11 @@
   "fpr": 0.01
  },
  "config_version": 1,
+ "env": {
+  "python": "3.12.15",
+  "numpy": "2.5.4",
+  "sklearn": "1.9.1"
+ },
  "ran_at": "2026-10-26",
  "result": {
   "name": "protectai-deberta-v3",

@@ -15,6 +15,11 @@
   "fpr": 0.01
  },
  "config_version": 1,
+ "env": {
+  "python": "3.12.15",
+  "numpy": "2.5.4",
+  "sklearn": "1.9.1"
+ },
  "ran_at": "2026-10-26",
  "result": {
   "name": "windowed",
@@ -90,9 +95,9 @@
    ],
    "mutators": {
     "leet": 4,
+    "pad_words": 4,
     "spaced_letters": 4,
     "homoglyph": 4,
-    "pad_words": 4,
     "synonym_swap": 4
    }
   },

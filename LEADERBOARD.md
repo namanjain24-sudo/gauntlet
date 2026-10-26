@@ -45,11 +45,11 @@ A **submitted** detector is a fixed artifact, so its row reproduces to the decim
 
 | detector | measured | python | scikit-learn | numpy |
 |---|---|---|---|---|
-| windowed | 2026-10-26 | ? | ? | ? |
-| hardened | 2026-10-26 | ? | ? | ? |
-| naive | 2026-10-26 | ? | ? | ? |
-| protectai-deberta-v3 | 2026-10-26 | ? | ? | ? |
-| keyword-list | 2026-10-26 | ? | ? | ? |
+| windowed | 2026-10-26 | 3.12.15 | 1.9.1 | 2.5.4 |
+| hardened | 2026-10-26 | 3.12.15 | 1.9.1 | 2.5.4 |
+| naive | 2026-10-26 | 3.12.15 | 1.9.1 | 2.5.4 |
+| protectai-deberta-v3 | 2026-10-26 | 3.12.15 | 1.9.1 | 2.5.4 |
+| keyword-list | 2026-10-26 | 3.12.15 | 1.9.1 | 2.5.4 |
 
 </details>
 
