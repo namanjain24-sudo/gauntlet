@@ -5,3 +5,7 @@ __pycache__/
 data/external/
 reports/quick/
 .DS_Store
+*.egg-info/
+build/
+dist/
+.ruff_cache/
